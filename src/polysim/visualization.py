@@ -10,7 +10,8 @@ def visualize_polymer(
     layout: str = 'spring',
     node_size: int = 300,
     node_color_by: str = 'monomer_type',
-    with_labels: bool = True,
+    node_outline_color: str = 'black',
+    with_labels: bool = False,
     title: Optional[str] = None,
     seed: Optional[int] = None,
     component_index: Optional[Union[int, str]] = None,
@@ -25,6 +26,7 @@ def visualize_polymer(
         layout: Graph layout algorithm ('spring', 'kamada_kawai', 'circular').
         node_size: Size of nodes in the visualization.
         node_color_by: Node attribute to use for coloring ('monomer_type' or None).
+        node_outline_color: Color of the node outline/border.
         with_labels: Whether to show node labels with monomer type.
         title: Optional title for the plot.
         seed: Random seed for layout algorithms.
@@ -101,7 +103,8 @@ def visualize_polymer(
         node_colors = 'skyblue'
         
     # --- Drawing ---
-    nx.draw_networkx_nodes(plot_graph, pos, node_color=node_colors, node_size=node_size, ax=ax)
+    nx.draw_networkx_nodes(plot_graph, pos, node_color=node_colors, node_size=node_size, 
+                          edgecolors=node_outline_color, linewidths=1.5, ax=ax)
     
     if plot_graph.number_of_edges() > 0:
         edge_pos = np.array([(pos[e[0]], pos[e[1]]) for e in plot_graph.edges()])
