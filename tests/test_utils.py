@@ -1,11 +1,7 @@
 import os
-import sys
 import matplotlib
 matplotlib.use('Agg') # Use non-interactive backend for tests
 import matplotlib.pyplot as plt
-
-# Add the src directory to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
 # Create a directory for test outputs
 os.makedirs("test_output", exist_ok=True)
@@ -25,8 +21,4 @@ def cleanup_figure(fig):
 def verify_visualization_outputs(save_paths):
     """Verify that visualization files were created."""
     for path in save_paths:
-        assert os.path.exists(path), f"Expected visualization file {path} to be created"
-
-
-# Setup matplotlib for all tests
-setup_matplotlib() 
+        assert os.path.exists(path), f"Expected visualization file {path} to be created" 

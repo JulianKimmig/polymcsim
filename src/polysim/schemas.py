@@ -21,6 +21,7 @@ class ReactionSchema(BaseModel):
     # Describes which site on the SECOND monomer is activated, and what it becomes.
     # Format: {"original_dormant_type": "new_active_type"}
     activation_map: Dict[str, str] = Field(default_factory=dict)
+    rate: float = Field(..., description="Rate constant for the reaction.")
 
 class SimParams(BaseModel):
     """Parameters to control the simulation execution."""
@@ -32,8 +33,6 @@ class SimParams(BaseModel):
 class SimulationInput(BaseModel):
     """The complete input configuration for a PolySim simulation."""
     monomers: List[MonomerDef]
-    # Rate constants k for each reactive pair. The key is a frozenset to be order-independent.
-    rate_matrix: Dict[frozenset[str], float]
     # Defines what happens to sites after a reaction.
-    reaction_schema: Dict[frozenset[str], ReactionSchema]
+    reactions: Dict[frozenset[str], ReactionSchema]
     params: SimParams = Field(default_factory=SimParams) 

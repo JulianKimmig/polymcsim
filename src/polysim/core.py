@@ -29,7 +29,7 @@ def _select_reaction_channel(propensities: np.ndarray, total_propensity: float) 
     return len(propensities) - 1
 
 @njit(cache=True)
-def _update_available_sites(available_sites, site_position_map, site_type_id, site_global_idx_to_remove):
+def _update_available_sites(available_sites: numba_dict_type, site_position_map: int_to_int_dict_type, site_type_id: int, site_global_idx_to_remove: int):
     """
     Truly O(1) removal of a site from the available list.
     It swaps the element to be removed with the last element and pops.
@@ -51,9 +51,10 @@ def _update_available_sites(available_sites, site_position_map, site_type_id, si
 
     # Remove the last element
     site_list.pop()
+    
 
 
-@njit(cache=True)
+
 def _run_kmc_loop(
     sites_data: np.ndarray,
     monomer_data: np.ndarray,
@@ -185,7 +186,16 @@ def _run_kmc_loop(
 
             for s_offset in range(num_sites_on_monomer):
                 site_to_check_idx = monomer2_first_site + s_offset
-                if sites_data[site_to_check_idx, 1] == target_dormant_type:
+                # We need to activate a DORMANT site that is NOT the one that just reacted.
+                
+                # Condition 1: It must be the correct dormant type.
+                is_correct_type = (sites_data[site_to_check_idx, 1] == target_dormant_type)
+                
+                # Condition 2: It must not be the site that just participated in the reaction.
+                # This is the key change that fixes the bug.
+                is_not_the_reacted_site = (site_to_check_idx != site2_global_idx)
+
+                if is_correct_type and is_not_the_reacted_site:
                     # Found it. Activate it.
                     sites_data[site_to_check_idx, 1] = new_active_type
                     sites_data[site_to_check_idx, 2] = STATUS_ACTIVE
@@ -200,3 +210,6 @@ def _run_kmc_loop(
         reaction_count += 1
         
     return edges, reaction_count, sim_time 
+
+
+run_kmc_loop = njit(cache=True)(_run_kmc_loop)

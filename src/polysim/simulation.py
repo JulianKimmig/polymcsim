@@ -6,10 +6,90 @@ from tqdm.auto import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from .schemas import SimulationInput, MonomerDef, SiteDef, ReactionSchema, SimParams
-from .core import _run_kmc_loop, STATUS_ACTIVE, STATUS_DORMANT, STATUS_CONSUMED
+from .core import run_kmc_loop, STATUS_ACTIVE, STATUS_DORMANT, STATUS_CONSUMED,_run_kmc_loop
 from numba.core import types
 from numba.typed import Dict as NumbaDict
 from numba.typed import List as NumbaList
+
+
+
+def _validate_config(config: SimulationInput):
+    """
+    Performs runtime validation of the simulation configuration beyond Pydantic's scope.
+    
+    Checks for logical consistency between different parts of the configuration.
+    Raises ValueError with a clear message if an issue is found.
+    """
+
+
+    # The check for key mismatches is now obsolete and has been removed.
+
+    all_known_types = set()
+    initial_site_statuses = {} # Maps site type string to its status ('ACTIVE' or 'DORMANT')
+    
+    for monomer in config.monomers:
+        for site in monomer.sites:
+            all_known_types.add(site.type)
+            if site.type in initial_site_statuses and initial_site_statuses[site.type] != site.status:
+                raise ValueError(
+                    f"Inconsistent Status: Site type '{site.type}' is defined as both ACTIVE and DORMANT "
+                    f"across different monomers. A site type must have a consistent status."
+                )
+            initial_site_statuses[site.type] = site.status
+    
+    for reaction_def in config.reactions.values():
+        all_known_types.update(reaction_def.activation_map.values())
+        
+    # 2. Validate reaction definitions using the complete set of known types.
+    for reaction_pair, reaction_def in config.reactions.items():
+        pair_list = list(reaction_pair)
+        
+        # Check that all reacting sites are known to the system.
+        for site_type in pair_list:
+            if site_type not in all_known_types:
+                raise ValueError(
+                    f"Undefined Site: The site type '{site_type}' used in reaction {reaction_pair} "
+                    f"is not defined on any monomer and is not created by any activation."
+                )
+
+        # Infer status of reacting sites (emergent sites are always ACTIVE).
+        type1 = pair_list[0]
+        type2 = pair_list[1] if len(pair_list) > 1 else type1
+        status1 = initial_site_statuses.get(type1, 'ACTIVE') # Default to ACTIVE for emergent types like 'Radical'
+        status2 = initial_site_statuses.get(type2, 'ACTIVE')
+
+        if status1 == 'DORMANT' and status2 == 'DORMANT':
+            raise ValueError(
+                f"Invalid Reaction: Reaction pair {reaction_pair} involves two DORMANT sites. "
+                f"At least one site in a reaction must be ACTIVE."
+            )
+            
+        # 3. Validate activation logic
+        if not reaction_def.activation_map:
+            continue
+            
+        original_dormant_type, new_active_type = list(reaction_def.activation_map.items())[0]
+
+        # The new type must be a known site type
+        if new_active_type not in all_known_types:
+            raise ValueError(
+                f"Undefined Activation Product: The new site type '{new_active_type}' created by activation "
+                f"in reaction {reaction_pair} is not defined anywhere in the system."
+            )
+
+        if original_dormant_type not in initial_site_statuses:
+            raise ValueError(
+                f"Undefined Activation Target: The site '{original_dormant_type}' targeted for activation in reaction "
+                f"{reaction_pair} is not defined on any monomer."
+            )
+
+        if initial_site_statuses[original_dormant_type] != 'DORMANT':
+             raise ValueError(
+                f"Invalid Activation Target: The site '{original_dormant_type}' targeted for activation in reaction "
+                f"{reaction_pair} must be DORMANT, but it is defined as ACTIVE."
+            )
+
+    return True
 
 def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
     """
@@ -19,30 +99,26 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
     configuration and the high-performance Numba-JIT'd core.
     """
     print("--- PolySim Simulation ---")
+    print("0. Validating configuration...")
+    _validate_config(config)
     print("1. Translating inputs to Numba-compatible format...")
     
     np.random.seed(config.params.random_seed)
 
     # Mappings from string names to integer IDs for Numba
     all_site_types = set()
-
-    # 1. From monomer definitions (finds 'Head', 'Tail', etc.)
     for m in config.monomers:
         for s in m.sites:
             all_site_types.add(s.type)
-
-    # 2. From rate matrix keys (finds 'Radical', 'I', etc.)
-    for pair in config.rate_matrix.keys():
+    # CHANGED: Iterate over the single `reactions` dict
+    for pair, reaction_def in config.reactions.items():
         all_site_types.update(pair)
-
-    # 3. From reaction schema activation maps (finds what sites become)
-    for schema in config.reaction_schema.values():
-        for new_type in schema.activation_map.values():
-            all_site_types.add(new_type)
-
+        all_site_types.update(reaction_def.activation_map.values())
+    
     # Now create the map. Sorting makes the mapping deterministic.
     site_type_map = {name: i for i, name in enumerate(sorted(list(all_site_types)))}    
     monomer_type_map = {m.name: i for i, m in enumerate(config.monomers)}
+
     
     # --- Flatten data into NumPy arrays ---
     total_monomers = sum(m.count for m in config.monomers)
@@ -99,14 +175,14 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
         for s in m.sites:
             site_status_map.setdefault(s.type, s.status)
     # Ensure types that only appear after activation are marked ACTIVE
-    for schema in config.reaction_schema.values():
+    for schema in config.reactions.values():
         for new_type in schema.activation_map.values():
              site_status_map.setdefault(new_type, 'ACTIVE')
              
     # 2. Now, build the reaction channel list with a guaranteed order.
     reaction_channels_list = []
     is_ad_reaction_channel_list = []
-    for pair in config.rate_matrix.keys():
+    for pair in config.reactions.keys():
         pair_list = list(pair)
         
         # Handle self-reaction first
@@ -129,11 +205,21 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
         else: # Both ACTIVE (or both DORMANT, which is a non-reactive channel anyway)
             reaction_channels_list.append(tuple(sorted(pair_list)))
             is_ad_reaction_channel_list.append(False)
+
+    
+    # test guards
+    for pair_tuple in reaction_channels_list:
+        pair_fs = frozenset(pair_tuple)
+        if pair_fs not in config.reactions:
+            raise ValueError(
+                f"Configuration Error: The reaction pair {pair_fs} is defined in `rate_matrix` "
+                f"but is missing from `reaction_schema`. Every reaction must have a defined outcome."
+            )
     
     # 3. The rest of the translation now works with this canonical ordering.
     num_reactions = len(reaction_channels_list)
     reaction_channels = np.array([[site_type_map[p[0]], site_type_map[p[1]]] for p in reaction_channels_list], dtype=np.int64)
-    rate_constants = np.array([config.rate_matrix[frozenset(p)] for p in reaction_channels_list], dtype=np.float64)
+    rate_constants = np.array([config.reactions[frozenset(p)].rate for p in reaction_channels_list], dtype=np.float64)
     is_ad_reaction_channel = np.array(is_ad_reaction_channel_list, dtype=np.bool_)
     is_self_reaction = np.array([p[0] == p[1] for p in reaction_channels_list], dtype=np.bool_)
     
@@ -141,7 +227,7 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
 
     for i, pair_tuple in enumerate(reaction_channels_list):
         pair_fs = frozenset(pair_tuple)
-        schema = config.reaction_schema[pair_fs]
+        schema = config.reactions[pair_fs]
         if schema.activation_map:
             original_type, new_type = list(schema.activation_map.items())[0]
             activation_outcomes[i, 0] = site_type_map[original_type]
@@ -164,22 +250,29 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
         while reactions_done_total < total_reactions_to_run:
             
             reactions_this_chunk = min(chunk_size, total_reactions_to_run - reactions_done_total)
-
-            edges_chunk, reactions_in_chunk, final_time = _run_kmc_loop(
+            kmc_args=(
                 sites_data,
-                monomer_data,
-                available_sites_active,
-                available_sites_dormant,
-                site_position_map_active,
-                site_position_map_dormant,
-                reaction_channels,
-                rate_constants,
-                is_ad_reaction_channel,
-                is_self_reaction,
-                activation_outcomes,
-                config.params.max_time,
-                reactions_this_chunk
+                    monomer_data,
+                    available_sites_active,
+                    available_sites_dormant,
+                    site_position_map_active,
+                    site_position_map_dormant,
+                    reaction_channels,
+                    rate_constants,
+                    is_ad_reaction_channel,
+                    is_self_reaction,
+                    activation_outcomes,
+                    config.params.max_time,
+                    reactions_this_chunk
             )
+            try:
+                edges_chunk, reactions_in_chunk, final_time = run_kmc_loop(
+                    *kmc_args
+                )
+            except Exception as e:
+                _run_kmc_loop(*kmc_args)
+                print(f"Error in KMC loop: {e}")
+                raise e
             
             if edges_chunk:
                 all_edges.extend(edges_chunk)
@@ -293,7 +386,7 @@ class Simulation:
 
         Returns None if the simulation has not been run.
         """
-        return self.metadata
+        return self.metadata 
 
 # --- Example Usage ---
 
@@ -316,13 +409,12 @@ if __name__ == "__main__":
                 SiteDef(type="B_AcidCl", status="ACTIVE"),
             ]),
         ],
-        rate_matrix={
-            frozenset(["A_Amine", "B_AcidCl"]): 1.0,
-        },
-        reaction_schema={
+
+        reactions={
             frozenset(["A_Amine", "B_AcidCl"]): ReactionSchema(
                 site1_final_status="CONSUMED",
                 site2_final_status="CONSUMED",
+                rate=1.0
             )
         },
         params=SimParams(max_reactions=4950, random_seed=101) # Stop just before gel point for this system
@@ -355,28 +447,26 @@ if __name__ == "__main__":
                 SiteDef(type="Tail", status="DORMANT"),
             ]),
         ],
-        rate_matrix={
-            frozenset(["Radical", "Head"]): 1000.0,  # Propagation
-            frozenset(["I", "Head"]): 1.0,          # Initiation
-            frozenset(["Radical", "Radical"]): 100.0 # Termination
-        },
-        reaction_schema={
+        reactions={
             # Initiation: Initiator radical attacks a monomer head
             frozenset(["I", "Head"]): ReactionSchema(
                 site1_final_status="CONSUMED",
                 site2_final_status="CONSUMED",
-                activation_map={"Tail": "Radical"} # The tail becomes a new radical
+                activation_map={"Tail": "Radical"}, # The tail becomes a new radical
+                rate=1.0
             ),
             # Propagation: Polymer radical attacks a new monomer head
             frozenset(["Radical", "Head"]): ReactionSchema(
                 site1_final_status="CONSUMED",
                 site2_final_status="CONSUMED",
-                activation_map={"Tail": "Radical"}
+                activation_map={"Tail": "Radical"},
+                rate=1000.0
             ),
             # Termination by combination
             frozenset(["Radical", "Radical"]): ReactionSchema(
                 site1_final_status="CONSUMED",
                 site2_final_status="CONSUMED",
+                rate=100.0
             )
         },
         params=SimParams(max_reactions=5000, random_seed=202)
