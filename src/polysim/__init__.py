@@ -25,4 +25,9 @@ __all__ = [
     "SimParams",
     "visualize_polymer",
     "plot_chain_length_distribution",
+    "plot_molecular_weight_distribution",
+    "plot_conversion_analysis",
+    "plot_branching_analysis",
+    "create_analysis_dashboard",
+    "export_polymer_data"
 ] 
