@@ -1,37 +1,56 @@
-import pytest
-import networkx as nx
+"""Integration tests for PolySim polymer simulation."""
+
 import os
+from typing import Tuple
+
 import matplotlib
-matplotlib.use('Agg') # Use non-interactive backend for tests
 import matplotlib.pyplot as plt
+import networkx as nx
+import pytest
+
+# Use non-interactive backend for tests
+matplotlib.use('Agg')
 
 from polysim import (
-    Simulation, 
-    SimulationInput, 
-    MonomerDef, 
-    SiteDef, 
-    ReactionSchema, 
+    MonomerDef,
+    ReactionSchema,
     SimParams,
+    Simulation,
+    SimulationInput,
+    SiteDef,
+    plot_chain_length_distribution,
     visualize_polymer,
-    plot_chain_length_distribution
 )
 
 # Create a directory for test outputs
 os.makedirs("test_output", exist_ok=True)
 
+
 @pytest.fixture
-def step_growth_config():
-    """Provides a config for a typical step-growth (A2 + B2) polymerization."""
+def step_growth_config() -> SimulationInput:
+    """Provide a config for a typical step-growth (A2 + B2) polymerization.
+    
+    Returns:
+        Simulation configuration for step-growth polymerization.
+    """
     return SimulationInput(
         monomers=[
-            MonomerDef(name="A2_Monomer", count=100, sites=[
-                SiteDef(type="A", status="ACTIVE"),
-                SiteDef(type="A", status="ACTIVE"),
-            ]),
-            MonomerDef(name="B2_Monomer", count=100, sites=[
-                SiteDef(type="B", status="ACTIVE"),
-                SiteDef(type="B", status="ACTIVE"),
-            ]),
+            MonomerDef(
+                name="A2_Monomer", 
+                count=100, 
+                sites=[
+                    SiteDef(type="A", status="ACTIVE"),
+                    SiteDef(type="A", status="ACTIVE"),
+                ]
+            ),
+            MonomerDef(
+                name="B2_Monomer", 
+                count=100, 
+                sites=[
+                    SiteDef(type="B", status="ACTIVE"),
+                    SiteDef(type="B", status="ACTIVE"),
+                ]
+            ),
         ],
         reactions={
             frozenset(["A", "B"]): ReactionSchema(
@@ -43,18 +62,31 @@ def step_growth_config():
         params=SimParams(max_reactions=150, random_seed=42)
     )
 
+
 @pytest.fixture
-def chain_growth_config():
-    """Provides a config for a typical chain-growth radical polymerization."""
+def chain_growth_config() -> SimulationInput:
+    """Provide a config for a typical chain-growth radical polymerization.
+    
+    Returns:
+        Simulation configuration for chain-growth polymerization.
+    """
     return SimulationInput(
         monomers=[
-            MonomerDef(name="Initiator", count=10, sites=[
-                SiteDef(type="I", status="ACTIVE")
-            ]),
-            MonomerDef(name="Monomer", count=200, sites=[
-                SiteDef(type="Head", status="DORMANT"),
-                SiteDef(type="Tail", status="DORMANT"),
-            ]),
+            MonomerDef(
+                name="Initiator", 
+                count=10, 
+                sites=[
+                    SiteDef(type="I", status="ACTIVE")
+                ]
+            ),
+            MonomerDef(
+                name="Monomer", 
+                count=200, 
+                sites=[
+                    SiteDef(type="Head", status="DORMANT"),
+                    SiteDef(type="Tail", status="DORMANT"),
+                ]
+            ),
         ],
         reactions={
             frozenset(["I", "Head"]): ReactionSchema(
@@ -78,8 +110,13 @@ def chain_growth_config():
         params=SimParams(max_reactions=180, random_seed=101)
     )
 
-def test_simulation_run_step_growth(step_growth_config):
-    """Tests that a step-growth simulation runs and produces a graph."""
+
+def test_simulation_run_step_growth(step_growth_config: SimulationInput) -> None:
+    """Test that a step-growth simulation runs and produces a graph.
+    
+    Args:
+        step_growth_config: Step-growth polymerization configuration.
+    """
     sim = Simulation(step_growth_config)
     graph, meta = sim.run()
 
@@ -94,11 +131,16 @@ def test_simulation_run_step_growth(step_growth_config):
         assert attrs["monomer_type"] in ["A2_Monomer", "B2_Monomer"]
 
     # All nodes should have degree <= 2 for this linear case
-    degrees = [d for n, d in graph.degree()]
+    degrees = [d for _, d in graph.degree()]
     assert all(d <= 2 for d in degrees)
 
-def test_simulation_run_chain_growth(chain_growth_config):
-    """Tests that a chain-growth simulation runs and produces a graph."""
+
+def test_simulation_run_chain_growth(chain_growth_config: SimulationInput) -> None:
+    """Test that a chain-growth simulation runs and produces a graph.
+    
+    Args:
+        chain_growth_config: Chain-growth polymerization configuration.
+    """
     sim = Simulation(chain_growth_config)
     graph, meta = sim.run()
 
@@ -113,12 +155,20 @@ def test_simulation_run_chain_growth(chain_growth_config):
     assert "Monomer" in types
 
     # Initiators should have degree 1 (or 0 if unreacted)
-    initiator_nodes = [n for n, d in graph.nodes(data=True) if d['monomer_type'] == 'Initiator']
+    initiator_nodes = [
+        n for n, d in graph.nodes(data=True) 
+        if d['monomer_type'] == 'Initiator'
+    ]
     for i_node in initiator_nodes:
         assert graph.degree(i_node) <= 1
 
-def test_visualization_step_growth(step_growth_config):
-    """Tests the visualization functions for a step-growth polymer."""
+
+def test_visualization_step_growth(step_growth_config: SimulationInput) -> None:
+    """Test the visualization functions for a step-growth polymer.
+    
+    Args:
+        step_growth_config: Step-growth polymerization configuration.
+    """
     sim = Simulation(step_growth_config)
     graph, _ = sim.run()
 
@@ -142,8 +192,13 @@ def test_visualization_step_growth(step_growth_config):
     plt.close(fig_dist)
     assert os.path.exists("test_output/step_growth_dist.png")
 
-def test_visualization_chain_growth(chain_growth_config):
-    """Tests the visualization functions for a chain-growth polymer."""
+
+def test_visualization_chain_growth(chain_growth_config: SimulationInput) -> None:
+    """Test the visualization functions for a chain-growth polymer.
+    
+    Args:
+        chain_growth_config: Chain-growth polymerization configuration.
+    """
     sim = Simulation(chain_growth_config)
     graph, _ = sim.run()
 
@@ -151,7 +206,7 @@ def test_visualization_chain_growth(chain_growth_config):
     fig_structure = visualize_polymer(
         graph, 
         title="Test Chain-Growth Structure (Largest)",
-        component_index=0, # Plot largest component
+        component_index=0,  # Plot largest component
         save_path="test_output/chain_growth_structure_largest.png"
     )
     assert fig_structure is not None

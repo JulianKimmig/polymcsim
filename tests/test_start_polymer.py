@@ -1,39 +1,48 @@
-import pytest
+"""Tests for star polymer simulations."""
+
 import networkx as nx
+import pytest
 
 from polysim import (
-    Simulation, 
-    SimulationInput, 
-    MonomerDef, 
-    SiteDef, 
-    ReactionSchema, 
+    MonomerDef,
+    ReactionSchema,
     SimParams,
+    Simulation,
+    SimulationInput,
+    SiteDef,
+    plot_chain_length_distribution,
     visualize_polymer,
-    plot_chain_length_distribution
 )
 from conftest import cleanup_figure, verify_visualization_outputs
 
-def test_star_polymer_generation():
-    """
-    Generates a star polymer using a multifunctional core with linear arms.
+
+def test_star_polymer_generation() -> None:
+    """Generate a star polymer using a multifunctional core with linear arms.
+    
     Star polymers have a central core with multiple linear arms radiating outward.
     """
-    from polysim import Simulation, SimulationInput, MonomerDef, SiteDef, ReactionSchema, SimParams, visualize_polymer, plot_chain_length_distribution
-
     # Star polymer: multifunctional core + linear arms
     # Use living polymerization approach to prevent inter-star connections
     n_core = 20  # Multifunctional cores (4 sites each)
     n_arms = 200  # Linear monomers for arms (2 sites each)
     sim_input = SimulationInput(
         monomers=[
-            MonomerDef(name="Core", count=n_core, sites=[
-                SiteDef(type="I", status="ACTIVE")  # Initiator sites
-                for _ in range(4)
-            ]),
-            MonomerDef(name="Arm", count=n_arms, sites=[
-                SiteDef(type="M", status="DORMANT"),  # Monomer sites (dormant)
-                SiteDef(type="M", status="DORMANT"),
-            ]),
+            MonomerDef(
+                name="Core", 
+                count=n_core, 
+                sites=[
+                    SiteDef(type="I", status="ACTIVE")  # Initiator sites
+                    for _ in range(4)
+                ]
+            ),
+            MonomerDef(
+                name="Arm", 
+                count=n_arms, 
+                sites=[
+                    SiteDef(type="M", status="DORMANT"),  # Monomer sites (dormant)
+                    SiteDef(type="M", status="DORMANT"),
+                ]
+            ),
         ],
         reactions={
             frozenset(["I", "M"]): ReactionSchema(
@@ -75,7 +84,7 @@ def test_star_polymer_generation():
     # Calculate star polymer metrics
     n_stars = len(star_centers)
     total_nodes = len(subgraph)
-    avg_degree = sum(d for n, d in subgraph.degree()) / total_nodes
+    avg_degree = sum(d for _, d in subgraph.degree()) / total_nodes
     
     print(f"Star polymer analysis:")
     print(f"  Total nodes: {total_nodes}")

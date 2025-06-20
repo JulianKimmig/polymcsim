@@ -1,34 +1,53 @@
-import pytest
+"""Tests for gradient polymer simulations."""
+
 import networkx as nx
+import pytest
 
 from polysim import (
-    Simulation, 
-    SimulationInput, 
-    MonomerDef, 
-    SiteDef, 
-    ReactionSchema, 
+    MonomerDef,
+    ReactionSchema,
     SimParams,
+    Simulation,
+    SimulationInput,
+    SiteDef,
+    plot_chain_length_distribution,
     visualize_polymer,
-    plot_chain_length_distribution
 )
 from conftest import cleanup_figure, verify_visualization_outputs
 
+
 @pytest.fixture
-def gradient_polymer_config():
-    """Provides a config for a linear gradient copolymer."""
+def gradient_polymer_config() -> SimulationInput:
+    """Provide a config for a linear gradient copolymer.
+    
+    Returns:
+        Simulation configuration for gradient polymer formation.
+    """
     return SimulationInput(
         monomers=[
-            MonomerDef(name="Initiator", count=5, sites=[
-                SiteDef(type="I", status="ACTIVE")
-            ]),
-            MonomerDef(name="MonomerA", count=100, sites=[
-                SiteDef(type="A_Head", status="DORMANT"),
-                SiteDef(type="A_Tail", status="DORMANT"),
-            ]),
-            MonomerDef(name="MonomerB", count=100, sites=[
-                SiteDef(type="B_Head", status="DORMANT"),
-                SiteDef(type="B_Tail", status="DORMANT"),
-            ]),
+            MonomerDef(
+                name="Initiator", 
+                count=5, 
+                sites=[
+                    SiteDef(type="I", status="ACTIVE")
+                ]
+            ),
+            MonomerDef(
+                name="MonomerA", 
+                count=100, 
+                sites=[
+                    SiteDef(type="A_Head", status="DORMANT"),
+                    SiteDef(type="A_Tail", status="DORMANT"),
+                ]
+            ),
+            MonomerDef(
+                name="MonomerB", 
+                count=100, 
+                sites=[
+                    SiteDef(type="B_Head", status="DORMANT"),
+                    SiteDef(type="B_Tail", status="DORMANT"),
+                ]
+            ),
         ],
         reactions={
             # Initiation
@@ -63,8 +82,12 @@ def gradient_polymer_config():
     )
 
 
-def test_simulation_run_gradient_polymer(gradient_polymer_config):
-    """Tests that a gradient polymer simulation runs and produces a valid structure."""
+def test_simulation_run_gradient_polymer(gradient_polymer_config: SimulationInput) -> None:
+    """Test that a gradient polymer simulation runs and produces a valid structure.
+    
+    Args:
+        gradient_polymer_config: Gradient polymer configuration.
+    """
     sim = Simulation(gradient_polymer_config)
     graph, meta = sim.run()
 
@@ -79,7 +102,7 @@ def test_simulation_run_gradient_polymer(gradient_polymer_config):
     assert "MonomerB" in types
 
     # All nodes should have degree <= 2 for this linear case
-    degrees = [d for n, d in graph.degree()]
+    degrees = [d for _, d in graph.degree()]
     assert all(d <= 2 for d in degrees)
 
     # Check that both monomer types are incorporated into the polymer chains
@@ -99,8 +122,12 @@ def test_simulation_run_gradient_polymer(gradient_polymer_config):
     assert has_monomer_b 
 
 
-def test_visualization_gradient_polymer(gradient_polymer_config):
-    """Tests the visualization functions for a gradient polymer."""
+def test_visualization_gradient_polymer(gradient_polymer_config: SimulationInput) -> None:
+    """Test the visualization functions for a gradient polymer.
+    
+    Args:
+        gradient_polymer_config: Gradient polymer configuration.
+    """
     sim = Simulation(gradient_polymer_config)
     graph, _ = sim.run()
 

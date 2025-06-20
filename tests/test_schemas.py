@@ -1,14 +1,19 @@
+"""Tests for PolySim schema validation."""
+
 import pytest
 from pydantic import ValidationError
-from polysim.schemas import MonomerDef, SiteDef, SimulationInput, SimParams, ReactionSchema
 
-def test_monomer_def_negative_count():
-    """Tests that a negative monomer count raises a validation error."""
+from polysim.schemas import MonomerDef, ReactionSchema, SimParams, SimulationInput, SiteDef
+
+
+def test_monomer_def_negative_count() -> None:
+    """Test that a negative monomer count raises a validation error."""
     with pytest.raises(ValidationError):
         MonomerDef(name="A", count=-1, sites=[SiteDef(type="A")])
 
-def test_simulation_input_good():
-    """Tests that a valid SimulationInput model can be created."""
+
+def test_simulation_input_good() -> None:
+    """Test that a valid SimulationInput model can be created."""
     config = SimulationInput(
         monomers=[
             MonomerDef(name="Monomer", count=100, sites=[SiteDef(type="A")])

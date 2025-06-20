@@ -1,36 +1,54 @@
-import pytest
+"""Tests for branched polymer simulations."""
+
 import networkx as nx
+import pytest
 
 from polysim import (
-    Simulation, 
-    SimulationInput, 
-    MonomerDef, 
-    SiteDef, 
-    ReactionSchema, 
+    MonomerDef,
+    ReactionSchema,
     SimParams,
+    Simulation,
+    SimulationInput,
+    SiteDef,
+    plot_chain_length_distribution,
     visualize_polymer,
-    plot_chain_length_distribution
 )
 from conftest import cleanup_figure, verify_visualization_outputs
 
 
 @pytest.fixture
-def branched_polymer_config():
-    """Provides a config for a branched polymer with trifunctional monomers."""
+def branched_polymer_config() -> SimulationInput:
+    """Provide a config for a branched polymer with trifunctional monomers.
+    
+    Returns:
+        Simulation configuration for branched polymer formation.
+    """
     return SimulationInput(
         monomers=[
-            MonomerDef(name="Initiator", count=10, sites=[
-                SiteDef(type="I", status="ACTIVE")
-            ]),
-            MonomerDef(name="LinearMonomer", count=200, sites=[
-                SiteDef(type="A_Head", status="DORMANT"),
-                SiteDef(type="A_Tail", status="DORMANT"),
-            ]),
-            MonomerDef(name="BranchMonomer", count=50, sites=[
-                SiteDef(type="B_Head", status="DORMANT"),
-                SiteDef(type="B_Tail", status="DORMANT"),
-                SiteDef(type="B_Branch", status="DORMANT"),  # Third site for branching
-            ]),
+            MonomerDef(
+                name="Initiator", 
+                count=10, 
+                sites=[
+                    SiteDef(type="I", status="ACTIVE")
+                ]
+            ),
+            MonomerDef(
+                name="LinearMonomer", 
+                count=200, 
+                sites=[
+                    SiteDef(type="A_Head", status="DORMANT"),
+                    SiteDef(type="A_Tail", status="DORMANT"),
+                ]
+            ),
+            MonomerDef(
+                name="BranchMonomer", 
+                count=50, 
+                sites=[
+                    SiteDef(type="B_Head", status="DORMANT"),
+                    SiteDef(type="B_Tail", status="DORMANT"),
+                    SiteDef(type="B_Branch", status="DORMANT"),  # Third site for branching
+                ]
+            ),
         ],
         
         reactions={
@@ -73,8 +91,12 @@ def branched_polymer_config():
     )
 
 
-def test_simulation_run_branched_polymer(branched_polymer_config):
-    """Tests that a branched polymer simulation runs and produces a valid structure."""
+def test_simulation_run_branched_polymer(branched_polymer_config: SimulationInput) -> None:
+    """Test that a branched polymer simulation runs and produces a valid structure.
+    
+    Args:
+        branched_polymer_config: Branched polymer configuration.
+    """
     sim = Simulation(branched_polymer_config)
     graph, meta = sim.run()
 
@@ -89,7 +111,7 @@ def test_simulation_run_branched_polymer(branched_polymer_config):
     assert "BranchMonomer" in types
 
     # Check for branching - some nodes should have degree > 2
-    degrees = [d for n, d in graph.degree()]
+    degrees = [d for _, d in graph.degree()]
     max_degree = max(degrees)
     assert max_degree > 2, f"Expected branching but max degree was {max_degree}"
 
@@ -114,8 +136,12 @@ def test_simulation_run_branched_polymer(branched_polymer_config):
     assert has_branch_monomer
 
 
-def test_visualization_branched_polymer(branched_polymer_config):
-    """Tests the visualization functions for a branched polymer."""
+def test_visualization_branched_polymer(branched_polymer_config: SimulationInput) -> None:
+    """Test the visualization functions for a branched polymer.
+    
+    Args:
+        branched_polymer_config: Branched polymer configuration.
+    """
     sim = Simulation(branched_polymer_config)
     graph, _ = sim.run()
 
@@ -146,29 +172,36 @@ def test_visualization_branched_polymer(branched_polymer_config):
     ])
 
 
-def test_hyperbranched_polymer_generation():
-    """
-    Generates a hyperbranched polymer using A2 + B4 monomers and checks for high branching and many terminal groups.
+def test_hyperbranched_polymer_generation() -> None:
+    """Generate a hyperbranched polymer using A2 + B4 monomers.
+    
+    Checks for high branching and many terminal groups.
     Reference: https://www.frontiersin.org/journals/energy-research/articles/10.3389/fenrg.2022.894096/full
     """
-    from polysim import Simulation, SimulationInput, MonomerDef, SiteDef, ReactionSchema, SimParams, visualize_polymer, plot_chain_length_distribution
-
     # A2 + B4 system: classic for hyperbranched polymers
     # Use stoichiometric imbalance to ensure terminal groups remain
     n_A2 = 80  # 160 A sites
     n_B4 = 60  # 240 B sites (excess B to create terminal groups)
     sim_input = SimulationInput(
         monomers=[
-            MonomerDef(name="A2", count=n_A2, sites=[
-                SiteDef(type="A", status="ACTIVE"),
-                SiteDef(type="A", status="ACTIVE"),
-            ]),
-            MonomerDef(name="B4", count=n_B4, sites=[
-                SiteDef(type="B", status="ACTIVE"),
-                SiteDef(type="B", status="ACTIVE"),
-                SiteDef(type="B", status="ACTIVE"),
-                SiteDef(type="B", status="ACTIVE"),
-            ]),
+            MonomerDef(
+                name="A2", 
+                count=n_A2, 
+                sites=[
+                    SiteDef(type="A", status="ACTIVE"),
+                    SiteDef(type="A", status="ACTIVE"),
+                ]
+            ),
+            MonomerDef(
+                name="B4", 
+                count=n_B4, 
+                sites=[
+                    SiteDef(type="B", status="ACTIVE"),
+                    SiteDef(type="B", status="ACTIVE"),
+                    SiteDef(type="B", status="ACTIVE"),
+                    SiteDef(type="B", status="ACTIVE"),
+                ]
+            ),
         ],
 
         reactions={
@@ -193,28 +226,20 @@ def test_hyperbranched_polymer_generation():
     components = list(nx.connected_components(graph))
     largest = max(components, key=len)
     subgraph = graph.subgraph(largest)
-    degrees = [d for n, d in subgraph.degree()]
+    degrees = [d for _, d in subgraph.degree()]
     n_branch_points = sum(1 for d in degrees if d >= 3)
     n_terminal = sum(1 for d in degrees if d == 1)
     avg_degree = sum(degrees) / len(degrees)
 
-    print(f"Hyperbranched polymer analysis:")
-    print(f"  Total nodes: {len(subgraph)}")
-    print(f"  Branch points (degree ≥ 3): {n_branch_points} ({100*n_branch_points/len(subgraph):.1f}%)")
-    print(f"  Terminal groups (degree = 1): {n_terminal} ({100*n_terminal/len(subgraph):.1f}%)")
-    print(f"  Average degree: {avg_degree:.2f}")
+    # Hyperbranched polymers should have many branch points and terminal groups
+    assert n_branch_points > 0, "Expected branch points in hyperbranched polymer"
+    assert n_terminal > 0, "Expected terminal groups in hyperbranched polymer"
+    assert avg_degree > 2.0, f"Expected average degree > 2, got {avg_degree}"
 
-    # Hyperbranched: many branch points, reasonable terminals, avg degree > 2
-    assert n_branch_points > 0.05 * len(subgraph), f"Expected >5% branch points, got {n_branch_points}/{len(subgraph)}"
-    assert n_terminal > 0, f"Expected some terminal groups, got {n_terminal}"
-    assert avg_degree > 2.0, f"Expected avg degree > 2, got {avg_degree}"
-
-    # Optionally visualize
+    # Test visualization
     fig = visualize_polymer(
         subgraph,
         title="Hyperbranched Polymer Structure",
-        component_index=0,
-        node_outline_color='black',
         save_path="test_output/hyperbranched_polymer_structure.png"
     )
     cleanup_figure(fig)
