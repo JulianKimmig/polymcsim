@@ -7,6 +7,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import networkx as nx
 import pytest
+from pathlib import Path
 
 # Use non-interactive backend for tests
 matplotlib.use('Agg')
@@ -20,10 +21,12 @@ from polysim import (
     SiteDef,
     plot_chain_length_distribution,
     visualize_polymer,
+    create_analysis_dashboard,
+    plot_molecular_weight_distribution,
 )
 
 # Create a directory for test outputs
-os.makedirs("test_output", exist_ok=True)
+
 
 
 @pytest.fixture
@@ -163,62 +166,88 @@ def test_simulation_run_chain_growth(chain_growth_config: SimulationInput) -> No
         assert graph.degree(i_node) <= 1
 
 
-def test_visualization_step_growth(step_growth_config: SimulationInput) -> None:
+def test_visualization_step_growth(step_growth_config: SimulationInput, plot_path: Path) -> None:
     """Test the visualization functions for a step-growth polymer.
     
     Args:
         step_growth_config: Step-growth polymerization configuration.
     """
     sim = Simulation(step_growth_config)
-    graph, _ = sim.run()
+    graph, metadata = sim.run()
+
+    # Create a dashboard for comprehensive analysis
+    dashboard_fig = create_analysis_dashboard(
+        graph, 
+        metadata, 
+        title="Step-Growth Polymer Analysis",
+        save_path=plot_path / "step_growth_dashboard.png"
+    )
+    assert dashboard_fig is not None
+    plt.close(dashboard_fig)
+
+    # Test MWD plot
+    mwd_fig = plot_molecular_weight_distribution(
+        graph, 
+        title="Step-Growth MWD",
+        save_path=plot_path / "step_growth_mwd.png"
+    )
+    assert mwd_fig is not None
+    plt.close(mwd_fig)
 
     # Test polymer structure visualization
-    fig_structure = visualize_polymer(
+    structure_fig = visualize_polymer(
         graph, 
-        title="Test Step-Growth Structure",
-        save_path="test_output/step_growth_structure.png"
-    )
-    assert fig_structure is not None
-    plt.close(fig_structure)
-    assert os.path.exists("test_output/step_growth_structure.png")
+        title="Step-Growth Structure",
+        save_path=plot_path / "step_growth_structure.png"
+    ) 
+    assert structure_fig is not None
+    plt.close(structure_fig)
 
-    # Test chain length distribution plot
-    fig_dist = plot_chain_length_distribution(
-        graph, 
-        title="Test Step-Growth Distribution",
-        save_path="test_output/step_growth_dist.png"
-    )
-    assert fig_dist is not None
-    plt.close(fig_dist)
-    assert os.path.exists("test_output/step_growth_dist.png")
+    # Verify files were created
+    assert os.path.exists(plot_path / "step_growth_dashboard.png")
+    assert os.path.exists(plot_path / "step_growth_mwd.png")
+    assert os.path.exists(plot_path / "step_growth_structure.png")
 
 
-def test_visualization_chain_growth(chain_growth_config: SimulationInput) -> None:
+def test_visualization_chain_growth(chain_growth_config: SimulationInput, plot_path: Path) -> None:
     """Test the visualization functions for a chain-growth polymer.
     
     Args:
         chain_growth_config: Chain-growth polymerization configuration.
     """
     sim = Simulation(chain_growth_config)
-    graph, _ = sim.run()
+    graph, metadata = sim.run()
+
+    # Create a dashboard for comprehensive analysis
+    dashboard_fig = create_analysis_dashboard(
+        graph, 
+        metadata, 
+        title="Chain-Growth Polymer Analysis",
+        save_path=plot_path / "chain_growth_dashboard.png"
+    )
+    assert dashboard_fig is not None
+    plt.close(dashboard_fig)
+
+    # Test MWD plot
+    mwd_fig = plot_molecular_weight_distribution(
+        graph, 
+        title="Chain-Growth MWD",
+        save_path=plot_path / "chain_growth_mwd.png"
+    )
+    assert mwd_fig is not None
+    plt.close(mwd_fig)
 
     # Test polymer structure visualization for the largest component
-    fig_structure = visualize_polymer(
+    structure_fig = visualize_polymer(
         graph, 
-        title="Test Chain-Growth Structure (Largest)",
-        component_index=0,  # Plot largest component
-        save_path="test_output/chain_growth_structure_largest.png"
+        title="Largest Chain-Growth Polymer",
+        component_index=0,
+        save_path=plot_path / "chain_growth_structure_largest.png"
     )
-    assert fig_structure is not None
-    plt.close(fig_structure)
-    assert os.path.exists("test_output/chain_growth_structure_largest.png")
-
-    # Test chain length distribution plot
-    fig_dist = plot_chain_length_distribution(
-        graph, 
-        title="Test Chain-Growth Distribution",
-        save_path="test_output/chain_growth_dist.png"
-    )
-    assert fig_dist is not None
-    plt.close(fig_dist)
-    assert os.path.exists("test_output/chain_growth_dist.png") 
+    assert structure_fig is not None
+    plt.close(structure_fig)
+    
+    # Verify files were created
+    assert os.path.exists(plot_path / "chain_growth_dashboard.png")
+    assert os.path.exists(plot_path / "chain_growth_mwd.png")
+    assert os.path.exists(plot_path / "chain_growth_structure_largest.png") 

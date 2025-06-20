@@ -2,6 +2,7 @@
 
 import networkx as nx
 import pytest
+from pathlib import Path
 
 from polysim import (
     MonomerDef,
@@ -12,6 +13,8 @@ from polysim import (
     SiteDef,
     plot_chain_length_distribution,
     visualize_polymer,
+    create_analysis_dashboard,
+    plot_molecular_weight_distribution,
 )
 from conftest import cleanup_figure, verify_visualization_outputs
 
@@ -122,36 +125,48 @@ def test_simulation_run_gradient_polymer(gradient_polymer_config: SimulationInpu
     assert has_monomer_b 
 
 
-def test_visualization_gradient_polymer(gradient_polymer_config: SimulationInput) -> None:
+def test_visualization_gradient_polymer(gradient_polymer_config: SimulationInput, plot_path: Path) -> None:
     """Test the visualization functions for a gradient polymer.
     
     Args:
         gradient_polymer_config: Gradient polymer configuration.
     """
     sim = Simulation(gradient_polymer_config)
-    graph, _ = sim.run()
+    graph, metadata = sim.run()
 
-    # Test polymer structure visualization
-    fig_structure = visualize_polymer(
+    # Create a dashboard for comprehensive analysis
+    dashboard_fig = create_analysis_dashboard(
         graph, 
-        title="Test Gradient Polymer Structure",
+        metadata, 
+        title="Gradient Copolymer Analysis",
+        save_path=plot_path / "gradient_polymer_dashboard.png"
+    )
+    assert dashboard_fig is not None
+    cleanup_figure(dashboard_fig)
+
+    # Test MWD plot
+    mwd_fig = plot_molecular_weight_distribution(
+        graph, 
+        title="Gradient Copolymer MWD",
+        save_path=plot_path / "gradient_polymer_mwd.png"
+    )
+    assert mwd_fig is not None
+    cleanup_figure(mwd_fig)
+
+    # Test polymer structure visualization, colored by monomer type
+    structure_fig = visualize_polymer(
+        graph, 
+        title="Largest Gradient Copolymer Chain",
         component_index=0,
-        save_path="test_output/gradient_polymer_structure.png"
+        node_color_by='monomer_type',
+        save_path=plot_path / "gradient_polymer_structure.png"
     )
-    assert fig_structure is not None
-    cleanup_figure(fig_structure)
-
-    # Test chain length distribution plot
-    fig_dist = plot_chain_length_distribution(
-        graph, 
-        title="Test Gradient Polymer Distribution",
-        save_path="test_output/gradient_polymer_dist.png"
-    )
-    assert fig_dist is not None
-    cleanup_figure(fig_dist)
+    assert structure_fig is not None
+    cleanup_figure(structure_fig)
 
     # Verify files were created
     verify_visualization_outputs([
-        "test_output/gradient_polymer_structure.png",
-        "test_output/gradient_polymer_dist.png"
+        plot_path / "gradient_polymer_dashboard.png",
+        plot_path / "gradient_polymer_mwd.png",
+        plot_path / "gradient_polymer_structure.png",
     ]) 

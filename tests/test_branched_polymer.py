@@ -2,6 +2,7 @@
 
 import networkx as nx
 import pytest
+from pathlib import Path
 
 from polysim import (
     MonomerDef,
@@ -12,6 +13,9 @@ from polysim import (
     SiteDef,
     plot_chain_length_distribution,
     visualize_polymer,
+    plot_molecular_weight_distribution,
+    plot_branching_analysis,
+    create_analysis_dashboard,
 )
 from conftest import cleanup_figure, verify_visualization_outputs
 
@@ -136,43 +140,63 @@ def test_simulation_run_branched_polymer(branched_polymer_config: SimulationInpu
     assert has_branch_monomer
 
 
-def test_visualization_branched_polymer(branched_polymer_config: SimulationInput) -> None:
+def test_visualization_branched_polymer(branched_polymer_config: SimulationInput,plot_path: Path) -> None:
     """Test the visualization functions for a branched polymer.
     
     Args:
         branched_polymer_config: Branched polymer configuration.
     """
     sim = Simulation(branched_polymer_config)
-    graph, _ = sim.run()
+    graph, metadata = sim.run()
 
-    # Test polymer structure visualization with outline
-    fig_structure = visualize_polymer(
+    # Create a dashboard for comprehensive analysis
+    dashboard_fig = create_analysis_dashboard(
         graph, 
-        title="Test Branched Polymer Structure",
+        metadata, 
+        title="Branched Polymer Analysis Dashboard",
+        save_path=plot_path / "branched_polymer_dashboard.png"
+    )
+    assert dashboard_fig is not None
+    cleanup_figure(dashboard_fig)
+
+    # Test individual plots as well
+    structure_fig = visualize_polymer(
+        graph, 
+        title="Largest Branched Polymer",
         component_index=0,
         node_outline_color='darkred',
-        save_path="test_output/branched_polymer_structure.png"
+        save_path=plot_path / "branched_polymer_structure.png"
     )
-    assert fig_structure is not None
-    cleanup_figure(fig_structure)
+    assert structure_fig is not None
+    cleanup_figure(structure_fig)
 
-    # Test chain length distribution plot
-    fig_dist = plot_chain_length_distribution(
+    mwd_fig = plot_molecular_weight_distribution(
         graph, 
-        title="Test Branched Polymer Distribution",
-        save_path="test_output/branched_polymer_dist.png"
+        title="Branched Polymer MWD",
+        log_scale=True,
+        save_path=plot_path / "branched_polymer_mwd.png"
     )
-    assert fig_dist is not None
-    cleanup_figure(fig_dist)
+    assert mwd_fig is not None
+    cleanup_figure(mwd_fig)
+
+    branching_fig = plot_branching_analysis(
+        graph,
+        title="Branched Polymer Branching Analysis",
+        save_path=plot_path / "branched_polymer_branching.png"
+    )
+    assert branching_fig is not None
+    cleanup_figure(branching_fig)
 
     # Verify files were created
     verify_visualization_outputs([
-        "test_output/branched_polymer_structure.png",
-        "test_output/branched_polymer_dist.png"
+        plot_path / "branched_polymer_dashboard.png",
+        plot_path / "branched_polymer_structure.png",
+        plot_path / "branched_polymer_mwd.png",
+        plot_path / "branched_polymer_branching.png",
     ])
 
 
-def test_hyperbranched_polymer_generation() -> None:
+def test_hyperbranched_polymer_generation(plot_path: Path) -> None:
     """Generate a hyperbranched polymer using A2 + B4 monomers.
     
     Checks for high branching and many terminal groups.
@@ -220,7 +244,7 @@ def test_hyperbranched_polymer_generation() -> None:
     )
 
     sim = Simulation(sim_input)
-    graph, meta = sim.run()
+    graph, metadata = sim.run()
 
     # Check that the largest component is highly branched
     components = list(nx.connected_components(graph))
@@ -237,12 +261,110 @@ def test_hyperbranched_polymer_generation() -> None:
     assert avg_degree > 2.0, f"Expected average degree > 2, got {avg_degree}"
 
     # Test visualization
-    fig = visualize_polymer(
-        subgraph,
-        title="Hyperbranched Polymer Structure",
-        save_path="test_output/hyperbranched_polymer_structure.png"
+    dashboard_fig = create_analysis_dashboard(
+        graph,
+        metadata,
+        title="Hyperbranched Polymer (A2+B4) Analysis",
+        save_path=plot_path / "hyperbranched_dashboard.png",
     )
-    cleanup_figure(fig)
-    verify_visualization_outputs(["test_output/hyperbranched_polymer_structure.png"])
+    assert dashboard_fig is not None
+    cleanup_figure(dashboard_fig)
+
+    structure_fig = visualize_polymer(
+        subgraph,
+        title="Largest Hyperbranched Polymer Structure",
+        save_path=plot_path / "hyperbranched_structure.png",
+    )
+    cleanup_figure(structure_fig)
+
+    # Verify files were created
+    verify_visualization_outputs([
+        plot_path / "hyperbranched_dashboard.png",
+        plot_path / "hyperbranched_structure.png",
+    ])
+
+
+def test_dendrimer_like_structure(plot_path: Path) -> None:
+    """Generate a dendrimer-like structure using A3 + B2 monomers.
+    
+    Checks for a large, single component formed.
+    Reference: https://www.frontiersin.org/journals/energy-research/articles/10.3389/fenrg.2022.894096/full
+    """
+    # A3 + B2 system: classic for dendrimer-like structures
+    # Use stoichiometric imbalance to ensure a large, single component formed
+    n_A3 = 120  # 360 A sites
+    n_B2 = 80  # 160 B sites (excess B to create terminal groups)
+    sim_input = SimulationInput(
+        monomers=[
+            MonomerDef(
+                name="A3", 
+                count=n_A3, 
+                sites=[
+                    SiteDef(type="A", status="ACTIVE"),
+                    SiteDef(type="A", status="ACTIVE"),
+                    SiteDef(type="A", status="ACTIVE"),
+                ]
+            ),
+            MonomerDef(
+                name="B2", 
+                count=n_B2, 
+                sites=[
+                    SiteDef(type="B", status="ACTIVE"),
+                    SiteDef(type="B", status="ACTIVE"),
+                ]
+            ),
+        ],
+
+        reactions={
+            frozenset(["A", "B"]): ReactionSchema(
+                site1_final_status="CONSUMED",
+                site2_final_status="CONSUMED",
+                rate=1.0
+            ),
+            frozenset(["A", "A"]): ReactionSchema(
+                site1_final_status="CONSUMED",
+                site2_final_status="CONSUMED",
+                rate=0.2
+            )
+        },
+        params=SimParams(max_reactions=300, random_seed=2024, name="dendrimer_like_structure")
+    )
+
+    sim = Simulation(sim_input)
+    graph, metadata = sim.run()
+
+    # --- Verification ---
+    assert isinstance(graph, nx.Graph), "Simulation did not return a valid graph"
+    assert graph.number_of_nodes() > 0, "Graph is empty after simulation"
+    
+    # Check that a large, single component formed
+    components = list(nx.connected_components(graph))
+    largest_component_size = len(components[0]) if components else 0
+    assert largest_component_size > (n_A3 + n_B2) * 0.5, "Expected a large dendrimer-like structure"
+    
+    # Visualize the result
+    dashboard_fig = create_analysis_dashboard(
+        graph,
+        metadata,
+        title="Dendrimer-like (A3+B2) Polymer Analysis",
+        save_path=plot_path / "dendrimer_dashboard.png"
+    )
+    assert dashboard_fig is not None
+    cleanup_figure(dashboard_fig)
+    
+    structure_fig = visualize_polymer(
+        graph,
+        component_index=0,
+        title="Dendrimer-like Structure",
+        layout='kamada_kawai',
+        save_path=plot_path / "dendrimer_structure.png"
+    )
+    assert structure_fig is not None
+    cleanup_figure(structure_fig)
+
+    verify_visualization_outputs([
+        plot_path / "dendrimer_dashboard.png",
+        plot_path / "dendrimer_structure.png"
+    ])
 
 

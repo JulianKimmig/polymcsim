@@ -3,6 +3,7 @@
 import numpy as np
 import networkx as nx
 import pytest
+from pathlib import Path
 
 from polysim import (
     MonomerDef,
@@ -95,7 +96,7 @@ def mma_radical_config() -> SimulationInput:
     )
 
 
-def test_mma_radical_polymerization_mwd(mma_radical_config: SimulationInput):
+def test_mma_radical_polymerization_mwd(mma_radical_config: SimulationInput, plot_path: Path):
     """
     Test radical polymerization of MMA and check if the PDI is within the
     theoretically expected range for this type of polymerization (~1.5-2.0).
@@ -106,7 +107,7 @@ def test_mma_radical_polymerization_mwd(mma_radical_config: SimulationInput):
     pdi = calculate_pdi(graph)
 
     # plot the mass distribution
-    plot_chain_length_distribution(graph, save_path="test_output/mma_radical_polymerization_mwd.png")
+    plot_chain_length_distribution(graph, save_path=plot_path / "mma_radical_polymerization_mwd.png")
     
     # For radical polymerization, PDI is theoretically between 1.5 and 2.0.
     # However, at high conversion (90%) and with this setup, lower PDI values are possible.

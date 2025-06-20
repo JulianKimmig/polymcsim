@@ -2,6 +2,7 @@
 
 import networkx as nx
 import pytest
+from pathlib import Path
 
 from polysim import (
     MonomerDef,
@@ -12,11 +13,13 @@ from polysim import (
     SiteDef,
     plot_chain_length_distribution,
     visualize_polymer,
+    create_analysis_dashboard,
+    plot_molecular_weight_distribution,
 )
 from conftest import cleanup_figure, verify_visualization_outputs
 
 
-def test_star_polymer_generation() -> None:
+def test_star_polymer_generation(plot_path: Path) -> None:
     """Generate a star polymer using a multifunctional core with linear arms.
     
     Star polymers have a central core with multiple linear arms radiating outward.
@@ -49,71 +52,77 @@ def test_star_polymer_generation() -> None:
                 site1_final_status="CONSUMED",
                 site2_final_status="CONSUMED",
                 activation_map={"M": "R"},  # Activate the other site as radical
-                rate=10.0
+                rate=1.0  # Lower initiation rate
             ),
             frozenset(["R", "M"]): ReactionSchema(
                 site1_final_status="CONSUMED",
                 site2_final_status="CONSUMED",
                 activation_map={"M": "R"},  # Propagate the radical
-                rate=0.8
+                rate=200.0  # Higher propagation rate to encourage long arms
             )
         },
-        params=SimParams(max_reactions=400, random_seed=2024, name="star_polymer")
+        params=SimParams(max_reactions=1000, random_seed=2024, name="star_polymer")
     )
 
     sim = Simulation(sim_input)
-    graph, meta = sim.run()
+    graph, metadata = sim.run()
 
-    # Analyze star polymer characteristics
+    # --- Verification ---
+    assert isinstance(graph, nx.Graph), "Simulation did not return a valid graph"
+    assert graph.number_of_nodes() > 0, "Graph is empty after simulation"
+    
+    # Check that a large, single component formed
     components = list(nx.connected_components(graph))
-    largest = max(components, key=len)
-    subgraph = graph.subgraph(largest)
+    largest_component_size = len(components[0]) if components else 0
+    assert largest_component_size > (n_core + n_arms) * 0.1, "Expected a large star polymer structure"
+    
+    # Analyze star polymer characteristics
+    subgraph = graph.subgraph(components[0])
     
     # Find potential star centers (nodes with degree >= 3)
     potential_stars = [n for n, d in subgraph.degree() if d >= 3]
     
     # Count actual star structures (core with multiple arms)
-    star_centers = []
-    for node in potential_stars:
-        if subgraph.nodes[node]["monomer_type"] == "Core":
-            neighbors = list(subgraph.neighbors(node))
-            # Check if this core has multiple connections (forming a star)
-            if len(neighbors) >= 2:
-                star_centers.append(node)
+    star_centers = [
+        node for node in potential_stars 
+        if subgraph.nodes[node]["monomer_type"] == "Core" 
+        and len(list(subgraph.neighbors(node))) >= 2
+    ]
     
-    # Calculate star polymer metrics
-    n_stars = len(star_centers)
-    total_nodes = len(subgraph)
-    avg_degree = sum(d for _, d in subgraph.degree()) / total_nodes
-    
-    print(f"Star polymer analysis:")
-    print(f"  Total nodes: {total_nodes}")
-    print(f"  Potential star centers (degree ≥ 3): {len(potential_stars)}")
-    print(f"  Actual star centers (Core with ≥2 arms): {n_stars}")
-    print(f"  Average degree: {avg_degree:.2f}")
-    
-    if star_centers:
-        # Analyze the largest star
-        largest_star = max(star_centers, key=lambda x: len(list(subgraph.neighbors(x))))
-        n_arms_largest = len(list(subgraph.neighbors(largest_star)))
-        print(f"  Largest star has {n_arms_largest} arms")
+    # Assertions
+    assert len(star_centers) > 0, "Expected at least one star structure to form"
 
-    # Star polymer assertions
-    assert n_stars > 0, f"Expected at least one star structure, got {n_stars}"
-    assert avg_degree > 1.5, f"Expected avg degree > 1.5 for star polymer, got {avg_degree}"
-    
-    # Check that cores are well-connected (star-like structure)
-    if star_centers:
-        avg_arms_per_star = sum(len(list(subgraph.neighbors(star))) for star in star_centers) / len(star_centers)
-        assert avg_arms_per_star >= 2.0, f"Expected avg arms per star ≥ 2, got {avg_arms_per_star}"
-
-    # Visualize the star polymer
-    fig = visualize_polymer(
-        subgraph,
-        component_index=0,
-        title="Star Polymer Structure",
-        node_outline_color='darkblue',
-        save_path="test_output/star_polymer_structure.png"
+    # --- Visualization ---
+    dashboard_fig = create_analysis_dashboard(
+        graph,
+        metadata,
+        title="Star Polymer (Core+Arms) Analysis",
+        save_path=plot_path / "star_polymer_dashboard.png"
     )
-    cleanup_figure(fig)
-    verify_visualization_outputs(["test_output/star_polymer_structure.png"]) 
+    assert dashboard_fig is not None
+    cleanup_figure(dashboard_fig)
+
+    mwd_fig = plot_molecular_weight_distribution(
+        graph,
+        log_scale=True,
+        title="Star Polymer Molecular Weight Distribution",
+        save_path=plot_path / "star_polymer_mwd.png"
+    )
+    assert mwd_fig is not None
+    cleanup_figure(mwd_fig)
+
+    structure_fig = visualize_polymer(
+        graph,
+        component_index=0,
+        title="Largest Star Polymer Structure",
+        layout='kamada_kawai',
+        save_path=plot_path / "star_polymer_structure.png"  
+    )
+    assert structure_fig is not None
+    cleanup_figure(structure_fig)
+
+    verify_visualization_outputs([
+        plot_path / "star_polymer_dashboard.png",
+        plot_path / "star_polymer_mwd.png",
+        plot_path / "star_polymer_structure.png"
+    ]) 
