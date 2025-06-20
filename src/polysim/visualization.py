@@ -1,8 +1,11 @@
-import networkx as nx
+"""Visualization utilities for PolySim polymer graphs."""
+
 import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
-from typing import Optional, Dict, Any, Tuple, List, Union
+import networkx as nx
 import numpy as np
+from matplotlib.collections import LineCollection
+from typing import Dict, List, Optional, Tuple, Union
+
 
 def visualize_polymer(
     graph: nx.Graph,
@@ -17,8 +20,7 @@ def visualize_polymer(
     component_index: Optional[Union[int, str]] = None,
     save_path: Optional[str] = None,
 ) -> plt.Figure:
-    """
-    Visualize a polymer graph with customizable styling.
+    """Visualize a polymer graph with customizable styling.
     
     Args:
         graph: The NetworkX Graph to visualize.
@@ -38,6 +40,10 @@ def visualize_polymer(
         
     Returns:
         Matplotlib Figure object.
+        
+    Raises:
+        TypeError: If input is not a NetworkX Graph object.
+        ValueError: If layout algorithm is unknown or component index is out of range.
     """
     if not isinstance(graph, nx.Graph):
         raise TypeError("Input must be a NetworkX Graph object.")
@@ -60,7 +66,7 @@ def visualize_polymer(
             polymer_components = [c for c in components if len(c) > 1]
             if not polymer_components:
                 print("No polymer chains with more than one monomer to plot.")
-                selected_nodes = components[0] # Fallback to largest component
+                selected_nodes = components[0]  # Fallback to largest component
             else:
                 rand_idx = np.random.randint(0, len(polymer_components))
                 selected_nodes = polymer_components[rand_idx]
@@ -68,7 +74,10 @@ def visualize_polymer(
             try:
                 selected_nodes = components[component_index]
             except IndexError:
-                raise ValueError(f"Component index {component_index} out of range. Graph has {len(components)} components.")
+                raise ValueError(
+                    f"Component index {component_index} out of range. "
+                    f"Graph has {len(components)} components."
+                )
         plot_graph = plot_graph.subgraph(selected_nodes).copy()
         
     if len(plot_graph) == 0:
@@ -94,7 +103,10 @@ def visualize_polymer(
         
     # --- Node Colors ---
     if node_color_by == 'monomer_type':
-        node_colors_map = [plot_graph.nodes[node].get('monomer_type', 'gray') for node in plot_graph.nodes()]
+        node_colors_map = [
+            plot_graph.nodes[node].get('monomer_type', 'gray') 
+            for node in plot_graph.nodes()
+        ]
         unique_types = sorted(list(set(node_colors_map)))
         color_palette = plt.colormaps.get_cmap('tab20')(np.linspace(0, 1, len(unique_types)))
         color_dict = dict(zip(unique_types, color_palette))
@@ -103,8 +115,10 @@ def visualize_polymer(
         node_colors = 'skyblue'
         
     # --- Drawing ---
-    nx.draw_networkx_nodes(plot_graph, pos, node_color=node_colors, node_size=node_size, 
-                          edgecolors=node_outline_color, linewidths=1.5, ax=ax)
+    nx.draw_networkx_nodes(
+        plot_graph, pos, node_color=node_colors, node_size=node_size, 
+        edgecolors=node_outline_color, linewidths=1.5, ax=ax
+    )
     
     if plot_graph.number_of_edges() > 0:
         edge_pos = np.array([(pos[e[0]], pos[e[1]]) for e in plot_graph.edges()])
@@ -112,8 +126,13 @@ def visualize_polymer(
         ax.add_collection(edge_collection)
     
     if with_labels:
-        labels = {node: f"{plot_graph.nodes[node]['monomer_type']}" for node in plot_graph.nodes()}
-        nx.draw_networkx_labels(plot_graph, pos, labels=labels, font_size=8, ax=ax, font_color="black")
+        labels = {
+            node: f"{plot_graph.nodes[node]['monomer_type']}" 
+            for node in plot_graph.nodes()
+        }
+        nx.draw_networkx_labels(
+            plot_graph, pos, labels=labels, font_size=8, ax=ax, font_color="black"
+        )
     
     # --- Title and Legend ---
     plot_title = title if title else "Polymer Structure"
@@ -122,9 +141,11 @@ def visualize_polymer(
     ax.set_title(plot_title, fontsize=16)
 
     if node_color_by == 'monomer_type' and 'color_dict' in locals():
-        legend_elements = [plt.Line2D([0], [0], marker='o', color='w', label=ctype,
-                                      markerfacecolor=color, markersize=10) 
-                           for ctype, color in color_dict.items()]
+        legend_elements = [
+            plt.Line2D([0], [0], marker='o', color='w', label=ctype,
+                      markerfacecolor=color, markersize=10) 
+            for ctype, color in color_dict.items()
+        ]
         ax.legend(handles=legend_elements, title="Monomer Types", loc="best")
 
     ax.set_aspect('equal')
@@ -143,8 +164,7 @@ def plot_chain_length_distribution(
     title: Optional[str] = None,
     save_path: Optional[str] = None,
 ) -> plt.Figure:
-    """
-    Plot the distribution of chain lengths in the polymer.
+    """Plot the distribution of chain lengths in the polymer.
     
     Args:
         graph: The NetworkX Graph to analyze.
@@ -154,6 +174,9 @@ def plot_chain_length_distribution(
             
     Returns:
         Matplotlib Figure object.
+        
+    Raises:
+        TypeError: If input is not a NetworkX Graph object.
     """
     if not isinstance(graph, nx.Graph):
         raise TypeError("Input must be a NetworkX Graph object.")
@@ -172,13 +195,17 @@ def plot_chain_length_distribution(
             f'Mean Length: {np.mean(chain_lengths):.2f}\n'
             f'Max Length: {max(chain_lengths)}'
         )
-        ax.text(0.95, 0.95, stats_text, transform=ax.transAxes,
-               verticalalignment='top', horizontalalignment='right',
-               bbox=dict(boxstyle='round,pad=0.5', facecolor='aliceblue', alpha=0.8))
+        ax.text(
+            0.95, 0.95, stats_text, transform=ax.transAxes,
+            verticalalignment='top', horizontalalignment='right',
+            bbox=dict(boxstyle='round,pad=0.5', facecolor='aliceblue', alpha=0.8)
+        )
     else:
-        ax.text(0.5, 0.5, "No polymer chains formed (all monomers are isolated).",
-                horizontalalignment='center', verticalalignment='center',
-                transform=ax.transAxes)
+        ax.text(
+            0.5, 0.5, "No polymer chains formed (all monomers are isolated).",
+            horizontalalignment='center', verticalalignment='center',
+            transform=ax.transAxes
+        )
 
     ax.set_xlabel('Chain Length (Number of Monomers)')
     ax.set_ylabel('Frequency')

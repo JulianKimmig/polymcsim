@@ -1,31 +1,37 @@
-import time
-import numpy as np
-import networkx as nx
-from typing import Tuple, Dict, Any, List
-from tqdm.auto import tqdm
-from concurrent.futures import ProcessPoolExecutor, as_completed
+"""Main simulation interface for PolySim polymer generation."""
 
-from .schemas import SimulationInput, MonomerDef, SiteDef, ReactionSchema, SimParams
-from .core import run_kmc_loop, STATUS_ACTIVE, STATUS_DORMANT, STATUS_CONSUMED,_run_kmc_loop
+import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import Any, Dict, List, Tuple, Optional
+
+import networkx as nx
+import numpy as np
 from numba.core import types
 from numba.typed import Dict as NumbaDict
 from numba.typed import List as NumbaList
+from tqdm.auto import tqdm
+
+from .core import STATUS_ACTIVE, STATUS_DORMANT, run_kmc_loop
+from .schemas import MonomerDef, ReactionSchema, SimParams, SimulationInput, SiteDef
 
 
-
-def _validate_config(config: SimulationInput):
-    """
-    Performs runtime validation of the simulation configuration beyond Pydantic's scope.
+def _validate_config(config: SimulationInput) -> bool:
+    """Perform runtime validation of the simulation configuration.
     
-    Checks for logical consistency between different parts of the configuration.
-    Raises ValueError with a clear message if an issue is found.
+    Checks for logical consistency between different parts of the configuration
+    beyond Pydantic's scope.
+    
+    Args:
+        config: The simulation configuration to validate.
+        
+    Returns:
+        True if validation passes.
+        
+    Raises:
+        ValueError: If configuration is invalid with a clear error message.
     """
-
-
-    # The check for key mismatches is now obsolete and has been removed.
-
     all_known_types = set()
-    initial_site_statuses = {} # Maps site type string to its status ('ACTIVE' or 'DORMANT')
+    initial_site_statuses: Dict[str, str] = {}  # Maps site type string to its status
     
     for monomer in config.monomers:
         for site in monomer.sites:
@@ -40,11 +46,11 @@ def _validate_config(config: SimulationInput):
     for reaction_def in config.reactions.values():
         all_known_types.update(reaction_def.activation_map.values())
         
-    # 2. Validate reaction definitions using the complete set of known types.
+    # Validate reaction definitions using the complete set of known types
     for reaction_pair, reaction_def in config.reactions.items():
         pair_list = list(reaction_pair)
         
-        # Check that all reacting sites are known to the system.
+        # Check that all reacting sites are known to the system
         for site_type in pair_list:
             if site_type not in all_known_types:
                 raise ValueError(
@@ -52,10 +58,10 @@ def _validate_config(config: SimulationInput):
                     f"is not defined on any monomer and is not created by any activation."
                 )
 
-        # Infer status of reacting sites (emergent sites are always ACTIVE).
+        # Infer status of reacting sites (emergent sites are always ACTIVE)
         type1 = pair_list[0]
         type2 = pair_list[1] if len(pair_list) > 1 else type1
-        status1 = initial_site_statuses.get(type1, 'ACTIVE') # Default to ACTIVE for emergent types like 'Radical'
+        status1 = initial_site_statuses.get(type1, 'ACTIVE')  # Default to ACTIVE for emergent types
         status2 = initial_site_statuses.get(type2, 'ACTIVE')
 
         if status1 == 'DORMANT' and status2 == 'DORMANT':
@@ -64,7 +70,7 @@ def _validate_config(config: SimulationInput):
                 f"At least one site in a reaction must be ACTIVE."
             )
             
-        # 3. Validate activation logic
+        # Validate activation logic
         if not reaction_def.activation_map:
             continue
             
@@ -91,12 +97,22 @@ def _validate_config(config: SimulationInput):
 
     return True
 
-def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
-    """
-    Main function to configure and run a polymer generation simulation.
 
+def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
+    """Run a polymer generation simulation.
+    
     This function acts as a bridge between the user-friendly Pydantic/Python
     configuration and the high-performance Numba-JIT'd core.
+    
+    Args:
+        config: Complete simulation configuration.
+        
+    Returns:
+        Tuple of (graph, metadata) where graph is the polymer structure and 
+        metadata contains simulation statistics.
+        
+    Raises:
+        ValueError: If configuration validation fails.
     """
     print("--- PolySim Simulation ---")
     print("0. Validating configuration...")
@@ -107,22 +123,21 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
 
     # Mappings from string names to integer IDs for Numba
     all_site_types = set()
-    for m in config.monomers:
-        for s in m.sites:
-            all_site_types.add(s.type)
-    # CHANGED: Iterate over the single `reactions` dict
+    for monomer in config.monomers:
+        for site in monomer.sites:
+            all_site_types.add(site.type)
+    # Collect all site types from reactions
     for pair, reaction_def in config.reactions.items():
         all_site_types.update(pair)
         all_site_types.update(reaction_def.activation_map.values())
     
-    # Now create the map. Sorting makes the mapping deterministic.
+    # Create deterministic mappings
     site_type_map = {name: i for i, name in enumerate(sorted(list(all_site_types)))}    
-    monomer_type_map = {m.name: i for i, m in enumerate(config.monomers)}
+    monomer_type_map = {monomer.name: i for i, monomer in enumerate(config.monomers)}
 
-    
-    # --- Flatten data into NumPy arrays ---
-    total_monomers = sum(m.count for m in config.monomers)
-    total_sites = sum(m.count * len(m.sites) for m in config.monomers)
+    # Flatten data into NumPy arrays
+    total_monomers = sum(monomer.count for monomer in config.monomers)
+    total_sites = sum(monomer.count * len(monomer.sites) for monomer in config.monomers)
 
     # sites_data: [monomer_id, site_type_id, status, monomer_site_idx]
     sites_data = np.zeros((total_sites, 4), dtype=np.int64)
@@ -139,19 +154,18 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
         available_sites_active[site_id] = NumbaList.empty_list(types.int64)
         available_sites_dormant[site_id] = NumbaList.empty_list(types.int64)
 
-
     current_monomer_id = 0
     current_site_idx = 0
-    for m_def in config.monomers:
-        monomer_type_id = monomer_type_map[m_def.name]
-        for i in range(m_def.count):
+    for monomer_def in config.monomers:
+        monomer_type_id = monomer_type_map[monomer_def.name]
+        for _ in range(monomer_def.count):
             monomer_data[current_monomer_id, 0] = monomer_type_id
             monomer_data[current_monomer_id, 1] = current_site_idx
-            for s_idx, site in enumerate(m_def.sites):
+            for site_idx, site in enumerate(monomer_def.sites):
                 site_type_id = site_type_map[site.type]
                 status_int = STATUS_ACTIVE if site.status == 'ACTIVE' else STATUS_DORMANT
                 
-                sites_data[current_site_idx] = [current_monomer_id, site_type_id, status_int, s_idx]
+                sites_data[current_site_idx] = [current_monomer_id, site_type_id, status_int, site_idx]
                 
                 # Populate initial available site lists and position maps
                 if status_int == STATUS_ACTIVE:
@@ -165,21 +179,20 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
 
                 current_site_idx += 1
             current_monomer_id += 1
-    monomer_data[total_monomers, 1] = total_sites # Sentinel for size calculation
+    monomer_data[total_monomers, 1] = total_sites  # Sentinel for size calculation
 
-    # --- Translate kinetics with CANONICAL ORDERING ---
-
-    # 1. First, create a map of site types to their status for easy lookup.
+    # Translate kinetics with canonical ordering
+    # First, create a map of site types to their status for easy lookup
     site_status_map = {}
-    for m in config.monomers:
-        for s in m.sites:
-            site_status_map.setdefault(s.type, s.status)
+    for monomer in config.monomers:
+        for site in monomer.sites:
+            site_status_map.setdefault(site.type, site.status)
     # Ensure types that only appear after activation are marked ACTIVE
     for schema in config.reactions.values():
         for new_type in schema.activation_map.values():
              site_status_map.setdefault(new_type, 'ACTIVE')
              
-    # 2. Now, build the reaction channel list with a guaranteed order.
+    # Build the reaction channel list with a guaranteed order
     reaction_channels_list = []
     is_ad_reaction_channel_list = []
     for pair in config.reactions.keys():
@@ -200,14 +213,13 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
             reaction_channels_list.append((type1, type2))
             is_ad_reaction_channel_list.append(True)
         elif status1 == 'DORMANT' and status2 == 'ACTIVE':
-            reaction_channels_list.append((type2, type1)) # SWAP to keep Active first
+            reaction_channels_list.append((type2, type1))  # SWAP to keep Active first
             is_ad_reaction_channel_list.append(True)
-        else: # Both ACTIVE (or both DORMANT, which is a non-reactive channel anyway)
+        else:  # Both ACTIVE (or both DORMANT, which is a non-reactive channel anyway)
             reaction_channels_list.append(tuple(sorted(pair_list)))
             is_ad_reaction_channel_list.append(False)
 
-    
-    # test guards
+    # Test guards
     for pair_tuple in reaction_channels_list:
         pair_fs = frozenset(pair_tuple)
         if pair_fs not in config.reactions:
@@ -216,10 +228,16 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
                 f"but is missing from `reaction_schema`. Every reaction must have a defined outcome."
             )
     
-    # 3. The rest of the translation now works with this canonical ordering.
+    # The rest of the translation now works with this canonical ordering
     num_reactions = len(reaction_channels_list)
-    reaction_channels = np.array([[site_type_map[p[0]], site_type_map[p[1]]] for p in reaction_channels_list], dtype=np.int64)
-    rate_constants = np.array([config.reactions[frozenset(p)].rate for p in reaction_channels_list], dtype=np.float64)
+    reaction_channels = np.array(
+        [[site_type_map[p[0]], site_type_map[p[1]]] for p in reaction_channels_list], 
+        dtype=np.int64
+    )
+    rate_constants = np.array(
+        [config.reactions[frozenset(p)].rate for p in reaction_channels_list], 
+        dtype=np.float64
+    )
     is_ad_reaction_channel = np.array(is_ad_reaction_channel_list, dtype=np.bool_)
     is_self_reaction = np.array([p[0] == p[1] for p in reaction_channels_list], dtype=np.bool_)
     
@@ -236,11 +254,9 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
     print("2. Starting KMC simulation loop...")
     start_time = time.time()
     
-    # --- Run the core simulation ---
-    # We run the simulation in chunks to provide progress updates.
-    
+    # Run the core simulation in chunks to provide progress updates
     total_reactions_to_run = config.params.max_reactions
-    chunk_size = max(1, total_reactions_to_run // 100) # Update 100 times
+    chunk_size = max(1, total_reactions_to_run // 100)  # Update 100 times
     
     all_edges = []
     reactions_done_total = 0
@@ -250,27 +266,24 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
         while reactions_done_total < total_reactions_to_run:
             
             reactions_this_chunk = min(chunk_size, total_reactions_to_run - reactions_done_total)
-            kmc_args=(
+            kmc_args = (
                 sites_data,
-                    monomer_data,
-                    available_sites_active,
-                    available_sites_dormant,
-                    site_position_map_active,
-                    site_position_map_dormant,
-                    reaction_channels,
-                    rate_constants,
-                    is_ad_reaction_channel,
-                    is_self_reaction,
-                    activation_outcomes,
-                    config.params.max_time,
-                    reactions_this_chunk
+                monomer_data,
+                available_sites_active,
+                available_sites_dormant,
+                site_position_map_active,
+                site_position_map_dormant,
+                reaction_channels,
+                rate_constants,
+                is_ad_reaction_channel,
+                is_self_reaction,
+                activation_outcomes,
+                config.params.max_time,
+                reactions_this_chunk
             )
             try:
-                edges_chunk, reactions_in_chunk, final_time = run_kmc_loop(
-                    *kmc_args
-                )
+                edges_chunk, reactions_in_chunk, final_time = run_kmc_loop(*kmc_args)
             except Exception as e:
-                _run_kmc_loop(*kmc_args)
                 print(f"Error in KMC loop: {e}")
                 raise e
             
@@ -291,46 +304,58 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
     print(f"   - Reactions: {reactions_done_total}")
     print(f"   - Final Sim Time: {final_time:.4e}")
 
-    # --- 4. Build user-friendly NetworkX graph output ---
+    # Build user-friendly NetworkX graph output
     print("4. Constructing NetworkX graph...")
-    G = nx.Graph()
+    graph = nx.Graph()
     
     # Add nodes with attributes
-    rev_monomer_map = {i: name for name, i in monomer_type_map.items()}
+    # Create a map from monomer_type_id not just to name but to the whole def
+    monomer_def_map = {monomer_type_map[m.name]: m for m in config.monomers}
+    
     for i in range(total_monomers):
-        m_type_id = monomer_data[i, 0]
-        G.add_node(i, monomer_type=rev_monomer_map[m_type_id])
+        monomer_type_id = monomer_data[i, 0]
+        monomer_def = monomer_def_map[monomer_type_id]
+        graph.add_node(
+            i, 
+            monomer_type=monomer_def.name,
+            molar_mass=monomer_def.molar_mass
+        )
     
     # Add edges with attributes
     for u, v, t in all_edges:
-        G.add_edge(int(u), int(v), formation_time=t)
+        graph.add_edge(int(u), int(v), formation_time=t)
         
     metadata = {
         "wall_time_seconds": end_time - start_time,
         "reactions_completed": reactions_done_total,
         "final_simulation_time": final_time,
-        "num_components": nx.number_connected_components(G),
+        "num_components": nx.number_connected_components(graph),
         "config": config.model_dump()
     }
     
-    return G, metadata
+    return graph, metadata
 
-def run_batch(configs: List[SimulationInput], max_workers: int = None) -> Dict[str, Tuple[nx.Graph, Dict[str, Any]]]:
-    """
-    Runs a batch of simulations in parallel using a process pool.
 
+def run_batch(
+    configs: List[SimulationInput], 
+    max_workers: Optional[int] = None
+) -> Dict[str, Tuple[nx.Graph, Dict[str, Any]]]:
+    """Run a batch of simulations in parallel using a process pool.
+    
     Args:
-        configs (List[SimulationInput]): A list of simulation configurations.
-        max_workers (int, optional): The maximum number of worker processes to use.
-                                     If None, it defaults to the number of CPUs on the machine.
-
+        configs: A list of simulation configurations.
+        max_workers: The maximum number of worker processes to use.
+                    If None, it defaults to the number of CPUs on the machine.
+    
     Returns:
-        Dict[str, Tuple[nx.Graph, Dict[str, Any]]]: A dictionary mapping simulation names
-                                                     to their (graph, metadata) results.
+        A dictionary mapping simulation names to their (graph, metadata) results.
     """
     results = {}
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        future_to_name = {executor.submit(run_simulation, config): config.params.name for config in configs}
+        future_to_name = {
+            executor.submit(run_simulation, config): config.params.name 
+            for config in configs
+        }
         
         for future in tqdm(as_completed(future_to_name), total=len(configs), desc="Batch Simulations"):
             name = future_to_name[future]
@@ -342,28 +367,26 @@ def run_batch(configs: List[SimulationInput], max_workers: int = None) -> Dict[s
                 results[name] = (None, {"error": str(exc)})
     return results
 
-class Simulation:
-    """
-    A wrapper for the optimized PolySim simulation engine.
-    """
-    def __init__(self, config: SimulationInput):
-        """
-        Initializes the simulation with a complete configuration.
 
+class Simulation:
+    """A wrapper for the optimized PolySim simulation engine."""
+    
+    def __init__(self, config: SimulationInput) -> None:
+        """Initialize the simulation with a complete configuration.
+        
         Args:
-            config (SimulationInput): The detailed simulation configuration object.
+            config: The detailed simulation configuration object.
         """
         self.config = config
-        self.graph: nx.Graph = None
-        self.metadata: Dict[str, Any] = None
+        self.graph: Optional[nx.Graph] = None
+        self.metadata: Optional[Dict[str, Any]] = None
 
     def run(self) -> Tuple[nx.Graph, Dict[str, Any]]:
-        """
-        Executes the simulation.
-
+        """Execute the simulation.
+        
         This method calls the core Numba-optimized Kinetic Monte Carlo engine
         and runs the simulation to completion based on the provided configuration.
-
+        
         Returns:
             A tuple containing:
             - nx.Graph: The final polymer network structure.
@@ -372,117 +395,18 @@ class Simulation:
         self.graph, self.metadata = run_simulation(self.config)
         return self.graph, self.metadata
 
-    def get_graph(self) -> nx.Graph:
-        """
-        Returns the resulting polymer graph.
-
-        Returns None if the simulation has not been run.
+    def get_graph(self) -> Optional[nx.Graph]:
+        """Return the resulting polymer graph.
+        
+        Returns:
+            The polymer graph, or None if the simulation has not been run.
         """
         return self.graph
 
-    def get_metadata(self) -> Dict[str, Any]:
-        """
-        Returns metadata from the simulation run.
-
-        Returns None if the simulation has not been run.
+    def get_metadata(self) -> Optional[Dict[str, Any]]:
+        """Return metadata from the simulation run.
+        
+        Returns:
+            The metadata dictionary, or None if the simulation has not been run.
         """
         return self.metadata 
-
-# --- Example Usage ---
-
-if __name__ == "__main__":
-
-    # --- EXAMPLE 1: Step-Growth Polymerization (A2 + B3 -> Crosslinked Gel) ---
-    print("\n" + "="*50)
-    print("Running Example 1: Step-Growth Crosslinking (A2 + B3)")
-    print("="*50)
-
-    config_step_growth = SimulationInput(
-        monomers=[
-            MonomerDef(name="A2_Diamine", count=3000, sites=[
-                SiteDef(type="A_Amine", status="ACTIVE"),
-                SiteDef(type="A_Amine", status="ACTIVE"),
-            ]),
-            MonomerDef(name="B3_AcidChloride", count=2000, sites=[
-                SiteDef(type="B_AcidCl", status="ACTIVE"),
-                SiteDef(type="B_AcidCl", status="ACTIVE"),
-                SiteDef(type="B_AcidCl", status="ACTIVE"),
-            ]),
-        ],
-
-        reactions={
-            frozenset(["A_Amine", "B_AcidCl"]): ReactionSchema(
-                site1_final_status="CONSUMED",
-                site2_final_status="CONSUMED",
-                rate=1.0
-            )
-        },
-        params=SimParams(max_reactions=4950, random_seed=101) # Stop just before gel point for this system
-    )
-
-    graph_sg, meta_sg = run_simulation(config_step_growth)
-    
-    # Basic analysis
-    if graph_sg.number_of_nodes() > 0:
-        largest_cc = max(nx.connected_components(graph_sg), key=len)
-        print(f"\nAnalysis (Step-Growth):")
-        print(f"  - Total nodes: {graph_sg.number_of_nodes()}")
-        print(f"  - Total edges: {graph_sg.number_of_edges()}")
-        print(f"  - Number of polymer chains/networks: {meta_sg['num_components']}")
-        print(f"  - Size of largest polymer: {len(largest_cc)} monomers")
-
-
-    # --- EXAMPLE 2: Chain-Growth Radical Polymerization (Styrene) ---
-    print("\n" + "="*50)
-    print("Running Example 2: Chain-Growth Radical Polymerization")
-    print("="*50)
-    
-    config_chain_growth = SimulationInput(
-        monomers=[
-            MonomerDef(name="Initiator", count=50, sites=[
-                SiteDef(type="I", status="ACTIVE")
-            ]),
-            MonomerDef(name="Styrene", count=5000, sites=[
-                SiteDef(type="Head", status="DORMANT"),
-                SiteDef(type="Tail", status="DORMANT"),
-            ]),
-        ],
-        reactions={
-            # Initiation: Initiator radical attacks a monomer head
-            frozenset(["I", "Head"]): ReactionSchema(
-                site1_final_status="CONSUMED",
-                site2_final_status="CONSUMED",
-                activation_map={"Tail": "Radical"}, # The tail becomes a new radical
-                rate=1.0
-            ),
-            # Propagation: Polymer radical attacks a new monomer head
-            frozenset(["Radical", "Head"]): ReactionSchema(
-                site1_final_status="CONSUMED",
-                site2_final_status="CONSUMED",
-                activation_map={"Tail": "Radical"},
-                rate=1000.0
-            ),
-            # Termination by combination
-            frozenset(["Radical", "Radical"]): ReactionSchema(
-                site1_final_status="CONSUMED",
-                site2_final_status="CONSUMED",
-                rate=100.0
-            )
-        },
-        params=SimParams(max_reactions=5000, random_seed=202)
-    )
-
-    graph_cg, meta_cg = run_simulation(config_chain_growth)
-
-    # Basic analysis
-    if graph_cg.number_of_nodes() > 0:
-        components = list(nx.connected_components(graph_cg))
-        # Filter out unreacted monomers (isolates)
-        polymer_chains = [c for c in components if len(c) > 1]
-        print(f"\nAnalysis (Chain-Growth):")
-        print(f"  - Total nodes: {graph_cg.number_of_nodes()}")
-        print(f"  - Total edges: {graph_cg.number_of_edges()}")
-        print(f"  - Number of polymer chains formed: {len(polymer_chains)}")
-        if polymer_chains:
-             print(f"  - Avg chain length: {np.mean([len(c) for c in polymer_chains]):.2f} monomers")
-             print(f"  - Max chain length: {max(len(c) for c in polymer_chains)} monomers") 

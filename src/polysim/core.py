@@ -1,9 +1,12 @@
+"""Core Kinetic Monte Carlo simulation engine for PolySim."""
+
 import numpy as np
 import numba
 from numba import njit
 from numba.core import types
 from numba.typed import Dict as NumbaDict
 from numba.typed import List as NumbaList
+from typing import Tuple, List
 
 # --- Numba-Optimized KMC Simulation Engine ---
 
@@ -17,23 +20,47 @@ STATUS_ACTIVE = 1
 STATUS_DORMANT = 0
 STATUS_CONSUMED = -1
 
+# Maximum attempts to find different monomers in a reaction
+MAX_MONOMER_SELECTION_ATTEMPTS = 100
+
+
 @njit(cache=True)
 def _select_reaction_channel(propensities: np.ndarray, total_propensity: float) -> int:
-    """Selects a reaction channel based on its propensity."""
+    """Select a reaction channel based on its propensity.
+    
+    Args:
+        propensities: Array of reaction propensities.
+        total_propensity: Sum of all propensities.
+        
+    Returns:
+        Index of the selected reaction channel.
+    """
     rand_val = np.random.rand() * total_propensity
     cumulative = 0.0
-    for i, p in enumerate(propensities):
-        cumulative += p
+    for i, propensity in enumerate(propensities):
+        cumulative += propensity
         if rand_val < cumulative:
             return i
     return len(propensities) - 1
 
+
 @njit(cache=True)
-def _update_available_sites(available_sites: numba_dict_type, site_position_map: int_to_int_dict_type, site_type_id: int, site_global_idx_to_remove: int):
-    """
-    Truly O(1) removal of a site from the available list.
+def _update_available_sites(
+    available_sites: numba_dict_type, 
+    site_position_map: int_to_int_dict_type, 
+    site_type_id: int, 
+    site_global_idx_to_remove: int
+) -> None:
+    """Remove a site from the available list using O(1) swap-and-pop.
+    
     It swaps the element to be removed with the last element and pops.
     This requires a map from site_global_idx to its position in the list.
+    
+    Args:
+        available_sites: Dictionary mapping site_type_id to list of global site indices.
+        site_position_map: Dictionary mapping site_global_idx to its position in the list.
+        site_type_id: Type ID of the site to remove.
+        site_global_idx_to_remove: Global index of the site to remove.
     """
     site_list = available_sites[site_type_id]
     
@@ -51,8 +78,6 @@ def _update_available_sites(available_sites: numba_dict_type, site_position_map:
 
     # Remove the last element
     site_list.pop()
-    
-
 
 
 def _run_kmc_loop(
@@ -69,21 +94,28 @@ def _run_kmc_loop(
     activation_outcomes: np.ndarray,
     max_time: float,
     max_reactions: int,
-):
-    """
-    The core, high-performance Kinetic Monte Carlo simulation loop.
+) -> Tuple[List[Tuple[int, int, float]], int, float]:
+    """Run the core Kinetic Monte Carlo simulation loop.
+    
     This function is pure Numba and only operates on NumPy arrays and Numba-typed collections.
     
     Args:
-        sites_data (np.ndarray): Shape (N_sites, 4). Cols: [monomer_id, site_type_id, status, monomer_site_idx]
-        monomer_data (np.ndarray): Shape (N_monomers, 2). Cols: [monomer_type_id, first_site_idx]
-        available_sites_*: Numba Dicts mapping site_type_id to a Numba List of global site indices.
-        site_position_map_*: Numba Dicts mapping site_global_idx to its position in the corresponding available_sites list.
-        reaction_channels (np.ndarray): Shape (N_reactions, 2). Pairs of reacting site_type_ids.
-        rate_constants (np.ndarray): Shape (N_reactions,). Rate constant for each channel.
-        is_ad_reaction_channel (np.ndarray): Shape (N_reactions,). Boolean array indicating active-dormant reaction channels.
-        is_self_reaction (np.ndarray): Shape (N_reactions,). Boolean array indicating self-reaction channels.
-        activation_outcomes (np.ndarray): Shape (N_reactions, 2). [target_dormant_type, new_active_type]
+        sites_data: Shape (N_sites, 4). Cols: [monomer_id, site_type_id, status, monomer_site_idx].
+        monomer_data: Shape (N_monomers, 2). Cols: [monomer_type_id, first_site_idx].
+        available_sites_active: Numba Dicts mapping site_type_id to a Numba List of global site indices.
+        available_sites_dormant: Numba Dicts mapping site_type_id to a Numba List of global site indices.
+        site_position_map_active: Numba Dicts mapping site_global_idx to its position in the active list.
+        site_position_map_dormant: Numba Dicts mapping site_global_idx to its position in the dormant list.
+        reaction_channels: Shape (N_reactions, 2). Pairs of reacting site_type_ids.
+        rate_constants: Shape (N_reactions,). Rate constant for each channel.
+        is_ad_reaction_channel: Shape (N_reactions,). Boolean array indicating active-dormant reaction channels.
+        is_self_reaction: Shape (N_reactions,). Boolean array indicating self-reaction channels.
+        activation_outcomes: Shape (N_reactions, 2). [target_dormant_type, new_active_type].
+        max_time: Maximum simulation time to run.
+        max_reactions: Maximum number of reaction events.
+        
+    Returns:
+        Tuple of (edges, reaction_count, sim_time) where edges is a list of (u, v, time) tuples.
     """
     sim_time = 0.0
     reaction_count = 0
@@ -103,17 +135,17 @@ def _run_kmc_loop(
             
             if is_ad_reaction_channel[i]:
                 n2 = len(available_sites_dormant.get(type2_id, NumbaList.empty_list(types.int64)))
-                prop = rate_constants[i] * n1 * n2
-            else: # Active-Active reaction
+                propensity = rate_constants[i] * n1 * n2
+            else:  # Active-Active reaction
                 n2 = len(available_sites_active.get(type2_id, NumbaList.empty_list(types.int64)))
                 if is_self_reaction[i]:
                     # Correction for reacting with the same type
-                    prop = rate_constants[i] * n1 * (n1 - 1) * 0.5
+                    propensity = rate_constants[i] * n1 * (n1 - 1) * 0.5
                 else:
-                    prop = rate_constants[i] * n1 * n2
+                    propensity = rate_constants[i] * n1 * n2
             
-            propensities[i] = prop
-            total_propensity += prop
+            propensities[i] = propensity
+            total_propensity += propensity
 
         if total_propensity == 0:
             print("No more reactions possible. Halting.")
@@ -137,8 +169,7 @@ def _run_kmc_loop(
             list2 = available_sites_active[type2_id]
             
         # Ensure we pick two different monomers
-        max_attempts = 100
-        for _ in range(max_attempts):
+        for _ in range(MAX_MONOMER_SELECTION_ATTEMPTS):
             idx1_in_list = np.random.randint(0, len(list1))
             site1_global_idx = list1[idx1_in_list]
             monomer1_id = sites_data[site1_global_idx, 0]
@@ -182,7 +213,11 @@ def _run_kmc_loop(
             # Find the site on monomer2 that needs activation
             monomer2_type_id = monomer_data[monomer2_id, 0]
             monomer2_first_site = monomer_data[monomer2_id, 1]
-            num_sites_on_monomer = monomer_data[monomer2_id + 1, 1] - monomer2_first_site if monomer2_id + 1 < len(monomer_data) else len(sites_data) - monomer2_first_site
+            num_sites_on_monomer = (
+                monomer_data[monomer2_id + 1, 1] - monomer2_first_site 
+                if monomer2_id + 1 < len(monomer_data) 
+                else len(sites_data) - monomer2_first_site
+            )
 
             for s_offset in range(num_sites_on_monomer):
                 site_to_check_idx = monomer2_first_site + s_offset
@@ -192,7 +227,6 @@ def _run_kmc_loop(
                 is_correct_type = (sites_data[site_to_check_idx, 1] == target_dormant_type)
                 
                 # Condition 2: It must not be the site that just participated in the reaction.
-                # This is the key change that fixes the bug.
                 is_not_the_reacted_site = (site_to_check_idx != site2_global_idx)
 
                 if is_correct_type and is_not_the_reacted_site:
@@ -209,7 +243,8 @@ def _run_kmc_loop(
                     
         reaction_count += 1
         
-    return edges, reaction_count, sim_time 
+    return edges, reaction_count, sim_time
 
 
+# JIT-compile the main simulation loop
 run_kmc_loop = njit(cache=True)(_run_kmc_loop)
