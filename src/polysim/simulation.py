@@ -11,7 +11,7 @@ from numba.typed import Dict as NumbaDict
 from numba.typed import List as NumbaList
 from tqdm.auto import tqdm
 
-from .core import STATUS_ACTIVE, STATUS_DORMANT, run_kmc_loop
+from .core import STATUS_ACTIVE, STATUS_DORMANT, STATUS_CONSUMED, run_kmc_loop
 from .schemas import MonomerDef, ReactionSchema, SimParams, SimulationInput, SiteDef
 
 
@@ -96,6 +96,29 @@ def _validate_config(config: SimulationInput) -> bool:
             )
 
     return True
+
+
+def _calculate_conversion(sites_data: np.ndarray, monomer_data: np.ndarray, total_monomers: int) -> float:
+    """Calculate the current conversion as fraction of monomers with at least one consumed site.
+    
+    Args:
+        sites_data: Array of site data with columns [monomer_id, site_type_id, status, monomer_site_idx].
+        monomer_data: Array of monomer data with columns [monomer_type_id, first_site_idx].
+        total_monomers: Total number of monomers in the system.
+        
+    Returns:
+        Conversion as a fraction between 0 and 1.
+    """
+    reacted_monomers = set()
+    
+    # Find all monomers that have at least one consumed site
+    for i in range(len(sites_data)):
+        if sites_data[i, 2] == STATUS_CONSUMED:  # Check if site is consumed
+            monomer_id = sites_data[i, 0]
+            reacted_monomers.add(monomer_id)
+    
+    conversion = len(reacted_monomers) / total_monomers if total_monomers > 0 else 0.0
+    return conversion
 
 
 def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
@@ -261,11 +284,44 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
     all_edges = []
     reactions_done_total = 0
     final_time = 0.0
-
+    
+    # Only track conversion if max_conversion is less than 1.0
+    track_conversion = config.params.max_conversion < 1.0
+    current_conversion = 0.0
+    
     with tqdm(total=total_reactions_to_run, desc="Simulating") as pbar:
+        # Check initial conversion only if we're tracking it
+        if track_conversion:
+            current_conversion = _calculate_conversion(sites_data, monomer_data, total_monomers)
+            if current_conversion >= config.params.max_conversion:
+                print(f"\nInitial conversion ({current_conversion:.2%}) already meets or exceeds max_conversion ({config.params.max_conversion:.2%})")
+            
         while reactions_done_total < total_reactions_to_run:
             
-            reactions_this_chunk = min(chunk_size, total_reactions_to_run - reactions_done_total)
+            # Check if we need to stop due to max_conversion
+            if track_conversion and current_conversion >= config.params.max_conversion:
+                print(f"\nMax conversion ({config.params.max_conversion:.2%}) reached at {current_conversion:.2%}")
+                pbar.total = reactions_done_total
+                pbar.refresh()
+                break
+                
+            # Adapt chunk size based on how close we are to max_conversion
+            if track_conversion:
+                # Estimate remaining reactions allowed
+                remaining_conversion = config.params.max_conversion - current_conversion
+                if remaining_conversion > 0:
+                    # Conservative estimate: assume each reaction converts 2 monomers
+                    estimated_reactions_left = int(remaining_conversion * total_monomers / 2)
+                    reactions_this_chunk = min(
+                        max(1, estimated_reactions_left // 10),  # Do in small chunks near limit
+                        chunk_size, 
+                        total_reactions_to_run - reactions_done_total
+                    )
+                else:
+                    break
+            else:
+                reactions_this_chunk = min(chunk_size, total_reactions_to_run - reactions_done_total)
+                
             kmc_args = (
                 sites_data,
                 monomer_data,
@@ -292,6 +348,11 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
             
             reactions_done_total += reactions_in_chunk
             pbar.update(reactions_in_chunk)
+            
+            # Check conversion after this chunk only if we're tracking it
+            if track_conversion:
+                current_conversion = _calculate_conversion(sites_data, monomer_data, total_monomers)
+                pbar.set_postfix({"conversion": f"{current_conversion:.2%}"})
 
             if reactions_in_chunk < reactions_this_chunk:
                 # KMC loop terminated early (no more reactions)
@@ -300,9 +361,14 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
                 break
     
     end_time = time.time()
+    
+    # Calculate final conversion
+    final_conversion = _calculate_conversion(sites_data, monomer_data, total_monomers)
+    
     print(f"3. Simulation finished in {end_time - start_time:.4f} seconds.")
     print(f"   - Reactions: {reactions_done_total}")
     print(f"   - Final Sim Time: {final_time:.4e}")
+    print(f"   - Final Conversion: {final_conversion:.2%}")
 
     # Build user-friendly NetworkX graph output
     print("4. Constructing NetworkX graph...")
@@ -329,6 +395,7 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
         "wall_time_seconds": end_time - start_time,
         "reactions_completed": reactions_done_total,
         "final_simulation_time": final_time,
+        "final_conversion": final_conversion,
         "num_components": nx.number_connected_components(graph),
         "config": config.model_dump()
     }

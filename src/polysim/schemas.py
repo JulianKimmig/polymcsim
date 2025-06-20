@@ -62,6 +62,7 @@ class SimParams(BaseModel):
         name: Name for this simulation run.
         max_time: Maximum simulation time to run.
         max_reactions: Maximum number of reaction events.
+        max_conversion: Maximum fraction of monomers that can be reacted (0.0 to 1.0).
         random_seed: Random seed for reproducible results.
     """
     name: str = Field(default="simulation", description="Name for this simulation run.")
@@ -72,6 +73,12 @@ class SimParams(BaseModel):
     max_reactions: int = Field(
         default=1_000_000_000, 
         description="Maximum number of reaction events."
+    )
+    max_conversion: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Maximum fraction of monomers that can be reacted (0.0 to 1.0)."
     )
     random_seed: int = Field(default=42, description="Random seed for reproducible results.")
 
