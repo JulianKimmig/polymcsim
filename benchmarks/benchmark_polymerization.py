@@ -60,14 +60,22 @@ def create_radical_sim_config(n_monomers: int, n_initiators: int) -> SimulationI
 
 @pytest.mark.parametrize(
     "n_monomers",
-    [100, 500, 1000, 2000, 5000]
+    [100, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000]
 )
-def test_radical_polymerization_scaling(benchmark, n_monomers):
+def test_radical_polymerization_scaling(benchmark, n_monomers,plot_path):
     """Benchmark radical polymerization with increasing numbers of monomers."""
     n_initiators = n_monomers // 20  # Keep initiator ratio constant
     config = create_radical_sim_config(n_monomers, n_initiators)
     sim = Simulation(config)
     
     # The benchmark fixture will run this function multiple times
-    benchmark(sim.run)
+    graph, metadata = benchmark(sim.run) 
+
+    # plot dashboard
+    create_analysis_dashboard(
+        graph,
+        metadata,
+        title="Cross-linked Polymer Analysis",
+        save_path=plot_path / "crosslinked_polymer_dashboard.png",
+    )   
 

@@ -49,3 +49,5 @@ build/
 
 # Environment variables
 .env 
+tests/test_output
+benchmarks/test_output
