@@ -1,3 +1,3 @@
 # Visualization
 
-::: polysim.visualization 
+::: polysim.visualization

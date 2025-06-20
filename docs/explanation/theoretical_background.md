@@ -83,4 +83,4 @@ Use PolySim's `plot_branching_analysis` to visualise mean branch length and gel 
 | Gelation in A₃ + B₂ | Mix of tri- and bi-functional monomers, track largest component |
 | Gradient copolymer | Use time-dependent feed (requires multiple simulations) |
 
-Keeping these theoretical insights in mind will guide you toward **physically meaningful** simulation setups and simplify the interpretation of PolySim's rich output. 
+Keeping these theoretical insights in mind will guide you toward **physically meaningful** simulation setups and simplify the interpretation of PolySim's rich output.

@@ -1,3 +1,3 @@
 # API Reference
 
-This section contains the API reference for `polysim`. 
+This section contains the API reference for `polysim`.

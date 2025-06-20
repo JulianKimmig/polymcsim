@@ -117,4 +117,4 @@ You now have CSV files containing node, edge, and summary data that can be loade
 
 *   Vary the `max_conversion` parameter to investigate the **Carothers equation** predictions.
 *   Introduce a small amount of mono-functional chain-stoppers to study how they limit molar mass.
-*   Use different `rate` constants for multiple reactions to explore **selectivity**. 
+*   Use different `rate` constants for multiple reactions to explore **selectivity**.

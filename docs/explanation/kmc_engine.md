@@ -94,4 +94,4 @@ Pull requests tackling these limitations are welcome!
 *   Smart data structures ensure O(1) updates, enabling large-scale simulations.
 *   Activation logic allows modelling of complex branching and radical processes.
 
-Understanding these internals empowers you to tune simulation parameters and interpret results with confidence. 
+Understanding these internals empowers you to tune simulation parameters and interpret results with confidence.
