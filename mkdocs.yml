@@ -1,0 +1,67 @@
+site_name: PolySim
+site_url: https://example.com/
+repo_url: https://github.com/user/polysim
+repo_name: user/polysim
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.annotate
+    - content.tabs.link
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+# Extensions
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_source: false
+
+# The Diátaxis Navigation Structure
+nav:
+  - 'Home': 'index.md'
+  - 'Tutorials':
+    - 'Getting Started': 'tutorials/getting_started.md'
+  - 'How-To Guides':
+    - 'Overview': 'how-to/index.md'
+    - 'Simulate Step-Growth Polymerization': 'how-to/step_growth.md'
+  - 'Reference':
+    - 'Overview': 'reference/index.md'
+    - 'Schemas': 'reference/schemas.md'
+    - 'Simulation': 'reference/simulation.md'
+    - 'Visualization': 'reference/visualization.md'
+  - 'Explanation':
+    - 'Overview': 'explanation/index.md'
+    - 'Kinetic Monte Carlo Engine': 'explanation/kmc_engine.md'
+    - 'Polymerization Theory': 'explanation/theoretical_background.md' 

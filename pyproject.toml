@@ -13,7 +13,13 @@ dependencies = [
     "numba>=0.57.0",
     "pydantic>=2.0.0",
     "networkx>=3.0",
-    "matplotlib>=3.8.0"
+    "matplotlib>=3.8.0",
+    "tqdm",
+    "pandas>=2.0.0",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.14",
+    "mkdocs-gen-files>=0.5.0",
+    "mkdocstrings[python]>=0.29.1",
 ]
 
 
@@ -33,8 +39,8 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
+testpaths = ["tests", "benchmarks"]
+python_files = ["test_*.py", "benchmark_*.py"]
 addopts = "--cov=polysim --cov-report=html --timeout=300" 
 timeout = 300
 
@@ -46,5 +52,6 @@ dev = [
     "black>=23.0.0",
     "flake8>=6.0.0",
     "mypy>=1.0.0",
-    "pre-commit>=3.0.0"
+    "pre-commit>=3.0.0",
+    "pytest-benchmark>=5.1.0",
 ]
