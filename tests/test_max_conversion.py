@@ -1,8 +1,8 @@
-"""Test the max_conversion functionality in PolySim."""
+"""Test the max_conversion functionality in PolyMCsim."""
 
 import pytest
 
-from polysim import (
+from polymcsim import (
     MonomerDef,
     ReactionSchema,
     SimParams,

@@ -1,4 +1,4 @@
-"""Core Kinetic Monte Carlo simulation engine for PolySim."""
+"""Core Kinetic Monte Carlo simulation engine for PolyMCsim."""
 
 from typing import List, Tuple
 

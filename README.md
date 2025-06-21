@@ -1,4 +1,4 @@
-# PolySim
+# PolyMCsim
 
 A high-performance Python library for computational chemists to generate polymer graph structures through Monte Carlo simulations. The library models polymerization reactions using monomers as nodes and chemical bonds as edges, enabling emergent generation of diverse polymer architectures.
 
@@ -13,7 +13,7 @@ A high-performance Python library for computational chemists to generate polymer
 
 ## Installation
 
-PolySim requires Python 3.8 or later. To install, run:
+PolyMCsim requires Python 3.8 or later. To install, run:
 
 ```bash
 # Using Poetry (recommended)
@@ -33,7 +33,7 @@ pip install .
 2. Clone the repository:
    ```bash
    git clone <repository-url>
-   cd polysim
+   cd polymcsim
    ```
 
 3. Install dependencies:
@@ -51,7 +51,7 @@ pip install .
 Basic example of polymer generation:
 
 ```python
-from polysim import PolymerSimulation
+from polymcsim import PolymerSimulation
 
 # Configure simulation
 sim = PolymerSimulation(
@@ -81,3 +81,43 @@ poetry run pytest
 ## Contributing
 
 Contributions are welcome! Please read our Contributing Guidelines for details on how to submit pull requests, report issues, and contribute to the project.
+
+*   **High Performance:** Built with `Numba` for C-like speed in computationally intensive parts.
+*   **Extensible:** Easily define new monomer types, reactions, and simulation parameters.
+*   **Rich Visualization:** Generate insightful plots and analyses right out of the box.
+
+For detailed information, visit the full documentation at [juliankimmig.github.io/polymcsim/](https://juliankimmig.github.io/polymcsim/).
+
+## Installation
+
+You can install `polymcsim` via pip:
+
+```bash
+pip install polymcsim
+```
+
+Alternatively, you can use `uv`:
+
+```bash
+uv pip install polymcsim
+```
+
+## Quick Start
+
+Here's a minimal example of how to simulate the formation of a branched polymer and visualize its structure:
+
+```python
+from polymcsim import PolymerSimulation
+
+# 1. Define monomers and reactions
+monomers = [
+    # ... existing code ...
+    # 4. Run the simulation
+    sim = PolymerSimulation(simulation_input)
+    polymer_graph = sim.run()
+
+    # 5. Visualize the largest polymer structure
+    sim.visualize_polymer(polymer_graph)
+```
+
+This will produce an image of the largest polymer's network structure. `polymcsim` also offers more advanced visualizations, such as molecular weight distribution plots and comprehensive analysis dashboards.

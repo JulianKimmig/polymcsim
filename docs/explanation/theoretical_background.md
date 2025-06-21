@@ -1,6 +1,6 @@
 # Polymerization Theory Overview
 
-Understanding the **chemical principles** behind polymer formation will help you choose the right simulation settings and correctly interpret PolySim's output.  This article summarises key concepts that underpin most synthetic polymer processes.
+Understanding the **chemical principles** behind polymer formation will help you choose the right simulation settings and correctly interpret PolyMCsim's output.  This article summarises key concepts that underpin most synthetic polymer processes.
 
 ---
 
@@ -38,7 +38,7 @@ For free-radical polymerization the **instantaneous** rate of polymerization is
 R_p = k_p [M][P^\*], \qquad [P^\*] \propto \sqrt{\frac{f k_d [I]}{k_t}}
 \]
 
-where \(k_p\), \(k_d\), \(k_t\) are the propagation, initiator dissociation, and termination rate constants.  PolySim captures this behaviour qualitatively through its event-driven KMC scheme.
+where \(k_p\), \(k_d\), \(k_t\) are the propagation, initiator dissociation, and termination rate constants.  PolyMCsim captures this behaviour qualitatively through its event-driven KMC scheme.
 
 ### 2.3 Gel Point (Flory–Stockmayer)
 
@@ -48,7 +48,7 @@ In network formation the **gel point** occurs when weight-average molar mass div
 p_c = \frac{1}{\sqrt{f - 1}} = \frac{1}{\sqrt{3 - 1}} = \frac{1}{\sqrt{2}} \approx 0.707
 \]
 
-You can study gelation in PolySim by monitoring the appearance of a **giant component** in the simulated graph.
+You can study gelation in PolyMCsim by monitoring the appearance of a **giant component** in the simulated graph.
 
 ---
 
@@ -58,7 +58,7 @@ You can study gelation in PolySim by monitoring the appearance of a **giant comp
 *   **Chain-Growth:** Ð depends on the ratio \(k_t/k_p\) and initiation efficiency.
 *   **Living:** Ð can be as low as ~1.05 if termination is negligible.
 
-PolySim's `plot_molecular_weight_distribution` automatically reports Ð to help you compare simulation to experiment.
+PolyMCsim's `plot_molecular_weight_distribution` automatically reports Ð to help you compare simulation to experiment.
 
 ---
 
@@ -70,7 +70,7 @@ Branching occurs when a monomer bears **>2 functional groups**.  The probability
 2.  Conversion (p).
 3.  Reactivity ratio of branching vs linear sites.
 
-Use PolySim's `plot_branching_analysis` to visualise mean branch length and gel content.
+Use PolyMCsim's `plot_branching_analysis` to visualise mean branch length and gel content.
 
 ---
 
@@ -83,4 +83,4 @@ Use PolySim's `plot_branching_analysis` to visualise mean branch length and gel 
 | Gelation in A₃ + B₂ | Mix of tri- and bi-functional monomers, track largest component |
 | Gradient copolymer | Use time-dependent feed (requires multiple simulations) |
 
-Keeping these theoretical insights in mind will guide you toward **physically meaningful** simulation setups and simplify the interpretation of PolySim's rich output.
+Keeping these theoretical insights in mind will guide you toward **physically meaningful** simulation setups and simplify the interpretation of PolyMCsim's rich output.

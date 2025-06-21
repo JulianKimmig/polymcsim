@@ -7,7 +7,7 @@ import networkx as nx
 import numpy as np
 import pytest
 
-from polysim import (
+from polymcsim import (
     MonomerDef,
     ReactionSchema,
     SimParams,

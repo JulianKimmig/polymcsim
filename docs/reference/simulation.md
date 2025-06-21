@@ -1,3 +1,3 @@
 # Simulation
 
-::: polysim.simulation
+::: polymcsim.simulation

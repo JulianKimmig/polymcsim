@@ -6,7 +6,7 @@ import networkx as nx
 import pytest
 from conftest import verify_visualization_outputs
 
-from polysim import (
+from polymcsim import (
     MonomerDef,
     ReactionSchema,
     SimParams,

@@ -1,4 +1,4 @@
-"""Pydantic schemas for PolySim configuration and validation."""
+"""Pydantic schemas for PolyMCsim configuration and validation."""
 
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ class SimParams(BaseModel):
 
 
 class SimulationInput(BaseModel):
-    """Complete input configuration for a PolySim simulation.
+    """Complete input configuration for a PolyMCsim simulation.
 
     Attributes:
         monomers: List of monomer definitions.

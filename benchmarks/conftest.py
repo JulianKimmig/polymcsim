@@ -1,4 +1,4 @@
-"""Test configuration and utilities for PolySim."""
+"""Test configuration and utilities for PolyMCsim."""
 
 import os
 import sys

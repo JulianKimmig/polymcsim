@@ -4,7 +4,7 @@
     * You have completed the [Getting Started](../tutorials/getting_started.md) tutorial.
     * `matplotlib` is installed (`pip install matplotlib`).
 
-Step-growth (also called condensation) polymerization describes the reaction of bifunctional **A** and **B** sites to form linear chains.  In `polysim` you model this by assigning every monomer two reactive sites—one **A** and one **B**—that consume each other.
+This guide demonstrates how to simulate step-growth polymerization, where bifunctional monomers with reactive sites **A** and **B** react to form linear chains. In `polymcsim`, you model this by assigning every monomer two reactive sites—one **A** and one **B**—that consume each other.
 
 This guide shows you how to:
 
@@ -18,7 +18,7 @@ This guide shows you how to:
 ## 1 Create the Simulation Input
 
 ```python title="step_growth_system.py" linenums="1"
-from polysim import (
+from polymcsim import (
     MonomerDef,
     ReactionSchema,
     SimParams,
@@ -39,8 +39,6 @@ monomer = MonomerDef(
 
 # When an A meets a B both sites are consumed (no activation products)
 reaction = ReactionSchema(
-
-
     rate=1.0,              # relative rate constant
 )
 
@@ -60,7 +58,7 @@ config = SimulationInput(
 ## 2 Run the Simulation
 
 ```python title="run_step_growth.py" linenums="1"
-from polysim import Simulation
+from polymcsim import Simulation
 from step_growth_system import config
 
 sim = Simulation(config)
@@ -76,7 +74,7 @@ The **conversion control** in `SimParams` stops the simulation early, preventing
 ## 3 Analyse the Molecular-Weight Distribution
 
 ```python title="analyse_mwd.py" linenums="1"
-from polysim import plot_molecular_weight_distribution
+from polymcsim import plot_molecular_weight_distribution
 import matplotlib.pyplot as plt
 
 fig = plot_molecular_weight_distribution(
@@ -95,7 +93,7 @@ At high conversions step-growth systems generate a broad, often **log-normal** M
 
 ```python title="export_graph.py" linenums="1"
 from pathlib import Path
-from polysim import export_polymer_data
+from polymcsim import export_polymer_data
 
 export_dir = Path("step_growth_output")
 export_files = export_polymer_data(

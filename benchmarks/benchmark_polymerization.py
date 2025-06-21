@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pytest_benchmark.fixture import BenchmarkFixture
 
-from polysim import (
+from polymcsim import (
     MonomerDef,
     ReactionSchema,
     SimParams,

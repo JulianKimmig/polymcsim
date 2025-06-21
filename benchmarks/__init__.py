@@ -1,1 +1,1 @@
-"""Benchmarks for the polysim package."""
+"""Benchmarks for the polymcsim package."""

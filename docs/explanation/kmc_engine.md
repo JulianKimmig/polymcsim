@@ -1,14 +1,14 @@
-# The Kinetic Monte Carlo Engine Behind PolySim
+# The Kinetic Monte Carlo Engine Behind PolyMCsim
 
 > “All models are wrong, but some are useful.” — George Box
 >
-> PolySim’s **Kinetic Monte Carlo (KMC)** core strikes a balance between physical realism and computational speed.
+> PolyMCsim’s **Kinetic Monte Carlo (KMC)** core strikes a balance between physical realism and computational speed.
 
 This article explains **how** the engine works and **why** certain design choices were made.  Understanding the internals will help you:
 
 *   Pick the right simulation parameters.
 *   Interpret the metadata returned by `Simulation.run()`.
-*   Extend PolySim with new reaction types.
+*   Extend PolyMCsim with new reaction types.
 
 ---
 
@@ -16,7 +16,7 @@ This article explains **how** the engine works and **why** certain design choice
 
 KMC simulates **stochastic** time evolution of a chemical system by executing discrete reaction events with probabilities proportional to their **propensity** (rate × population size).
 
-PolySim uses the classic **Gillespie algorithm** in its *direct* variant:
+PolyMCsim uses the classic **Gillespie algorithm** in its *direct* variant:
 
 1.  Compute the total propensity \(a_0 = \sum_i a_i\).
 2.  Draw two random numbers \(r_1, r_2 \in (0,1]\).
@@ -24,7 +24,7 @@ PolySim uses the classic **Gillespie algorithm** in its *direct* variant:
 4.  Select reaction \(\mu\) such that \(\sum_{i<\mu} a_i < r_2 a_0 \le \sum_{i\le\mu} a_i\).
 5.  Apply the reaction, update populations, and repeat.
 
-PolySim implements this loop in **Numba-JIT-compiled** code for near-C speed.
+PolyMCsim implements this loop in **Numba-JIT-compiled** code for near-C speed.
 
 ---
 
@@ -45,7 +45,7 @@ PolySim implements this loop in **Numba-JIT-compiled** code for near-C speed.
 
 ## 3 Handling Different Reaction Topologies
 
-PolySim distinguishes three channel types:
+PolyMCsim distinguishes three channel types:
 
 1.  **Active–Active** (AA): both sites start `ACTIVE`.
 2.  **Active–Dormant** (AD): an `ACTIVE` site reacts with a `DORMANT` site *and may activate* a hidden site afterwards (radical transfer).
@@ -58,7 +58,7 @@ propensity computation) vectorise well inside the JIT loop.
 
 ## 4 Activation Logic
 
-A hallmark of PolySim is support for **post-reaction activation**—crucial for radical and step-growth systems.  The activation map in `ReactionSchema` tells the engine:
+A hallmark of PolyMCsim is support for **post-reaction activation**—crucial for radical and step-growth systems.  The activation map in `ReactionSchema` tells the engine:
 
 *   Which dormant site type becomes active.
 *   What new active type it turns into.
@@ -90,7 +90,7 @@ Pull requests tackling these limitations are welcome!
 
 ## 7 Key Takeaways
 
-*   PolySim uses a Gillespie **direct KMC** algorithm compiled with Numba.
+*   PolyMCsim uses a Gillespie **direct KMC** algorithm compiled with Numba.
 *   Smart data structures ensure O(1) updates, enabling large-scale simulations.
 *   Activation logic allows modelling of complex branching and radical processes.
 

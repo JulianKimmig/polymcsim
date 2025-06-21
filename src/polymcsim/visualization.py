@@ -1,4 +1,4 @@
-"""Visualization utilities for PolySim polymer graphs."""
+"""Visualization utilities for PolyMCsim polymer graphs."""
 
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union

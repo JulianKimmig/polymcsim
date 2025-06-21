@@ -1,4 +1,4 @@
-"""Main simulation interface for PolySim polymer generation."""
+"""Main simulation interface for PolyMCsim polymer generation."""
 
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -158,7 +158,7 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
         ValueError: If configuration validation fails.
 
     """
-    print("--- PolySim Simulation ---")
+    print("--- PolyMCsim Simulation ---")
     print("0. Validating configuration...")
     _validate_config(config)
     print("1. Translating inputs to Numba-compatible format...")
@@ -490,7 +490,7 @@ def run_batch(
 
 
 class Simulation:
-    """A wrapper for the optimized PolySim simulation engine."""
+    """A wrapper for the optimized PolyMCsim simulation engine."""
 
     def __init__(self, config: SimulationInput) -> None:
         """Initialize the simulation with a complete configuration.

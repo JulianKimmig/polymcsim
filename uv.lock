@@ -969,7 +969,7 @@ wheels = [
 ]
 
 [[package]]
-name = "polysim"
+name = "polymcsim"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
@@ -987,7 +987,7 @@ dependencies = [
     { name = "tqdm" },
 ]
 
-[package.dev-dependencies]
+[package.optional-dependencies]
 dev = [
     { name = "mypy" },
     { name = "pre-commit" },
@@ -1004,24 +1004,21 @@ requires-dist = [
     { name = "mkdocs-gen-files", specifier = ">=0.5.0" },
     { name = "mkdocs-material", specifier = ">=9.6.14" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=0.29.1" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "networkx", specifier = ">=3.0" },
     { name = "numba", specifier = ">=0.57.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "pandas", specifier = ">=2.0.0" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.1" },
+    { name = "pytest-benchmark", marker = "extra == 'dev'", specifier = ">=5.1.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
+    { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.1.0" },
     { name = "scipy", specifier = ">=1.10.0" },
     { name = "tqdm" },
 ]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.0.0" },
-    { name = "pre-commit", specifier = ">=3.0.0" },
-    { name = "pytest", specifier = ">=8.4.1" },
-    { name = "pytest-benchmark", specifier = ">=5.1.0" },
-    { name = "pytest-cov", specifier = ">=4.0.0" },
-    { name = "pytest-timeout", specifier = ">=2.1.0" },
-]
+provides-extras = ["dev"]
 
 [[package]]
 name = "pre-commit"

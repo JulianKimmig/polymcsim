@@ -1,4 +1,4 @@
-"""PolySim - Monte Carlo Polymer Graph Generation Library."""
+"""PolyMCsim - Monte Carlo Polymer Graph Generation Library."""
 
 from .schemas import MonomerDef, ReactionSchema, SimParams, SimulationInput, SiteDef
 from .simulation import Simulation, run_batch, run_simulation

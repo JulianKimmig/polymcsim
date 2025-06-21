@@ -1,9 +1,9 @@
-"""Tests for PolySim schema validation."""
+"""Tests for PolyMCsim schema validation."""
 
 import pytest
 from pydantic import ValidationError
 
-from polysim.schemas import (
+from polymcsim.schemas import (
     MonomerDef,
     ReactionSchema,
     SimulationInput,

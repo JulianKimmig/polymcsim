@@ -1,3 +1,3 @@
 # Schemas
 
-::: polysim.schemas
+::: polymcsim.schemas

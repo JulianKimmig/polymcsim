@@ -5,7 +5,7 @@ from pathlib import Path
 import networkx as nx
 import pytest
 
-from polysim import (
+from polymcsim import (
     MonomerDef,
     ReactionSchema,
     SimParams,

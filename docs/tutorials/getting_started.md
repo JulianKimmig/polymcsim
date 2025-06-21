@@ -1,19 +1,15 @@
-# Getting Started with PolySim
+# Getting Started with PolyMCsim
 
-This tutorial will guide you through the process of setting up and running a polymer simulation with `polysim`, and then visualizing the results. We will simulate the formation of a branched polymer and explore its properties.
+This tutorial will guide you through the process of setting up and running a polymer simulation with `polymcsim`, and then visualizing the results. We will simulate the formation of a branched polymer and explore its properties.
 
-## 1. Defining the Polymer System
+## 1. Defining the System
 
-First, we need to define the monomers and reactions for our simulation. We'll create a system with three types of monomers to produce a branched polymer.
+First, you need to define the monomers and the reaction chemistry. Let's consider a simple system with a trifunctional monomer (`A3`) that can react with itself.
 
-- A **trifunctional monomer** that can act as a branching point.
-- A **bifunctional monomer** to form linear chains.
-- A **monofunctional monomer** that acts as a chain stopper, terminating growth.
+Here's how to define this system using `polymcsim`'s schema objects:
 
-Here's how to define this system using `polysim`'s schema objects:
-
-```python title="create_system.py"
-from polysim import (
+```python
+from polymcsim import (
     MonomerDef,
     ReactionSchema,
     SimParams,
@@ -46,8 +42,6 @@ def create_branched_polymer_system():
         ],
         reactions={
             frozenset(["A", "B"]): ReactionSchema(
-
-
                 rate=1.0
             )
         },
@@ -62,12 +56,22 @@ def create_branched_polymer_system():
 sim_input = create_branched_polymer_system()
 ```
 
-## 2. Running the Simulation
+## 2. Setting Up the Simulation
 
-With the system defined, we can now run the simulation. We create a `Simulation` instance with our configuration and call the `run()` method.
+Next, we define the simulation parameters, such as the number of monomers and the desired conversion.
 
-```python title="run_simulation.py"
-from polysim import Simulation
+```python
+from polymcsim import Simulation
+
+# ... (rest of the setup from above)
+```
+
+## 3. Running the Simulation
+
+With the input defined, we can now run the simulation.
+
+```python
+from polymcsim import Simulation
 # Assuming sim_input from the previous step is available
 
 # Create and run the simulation
@@ -78,27 +82,16 @@ print(f"Simulation completed with {metadata['reactions_completed']} reactions")
 print(f"Final conversion: {metadata['final_conversion']:.1%}")
 ```
 
-The `run()` method returns a `networkx.Graph` object representing the polymer structures and a dictionary containing metadata about the simulation, such as the number of reactions and the final conversion.
+## 4. Visualizing the Results
 
-## 3. Visualizing the Results
+`polymcsim` provides a suite of powerful visualization tools to analyze the simulation output. You'll need `matplotlib` installed to use them (`pip install matplotlib`).
 
-`polysim` provides a suite of powerful visualization tools to analyze the simulation output. You'll need `matplotlib` installed to use them (`pip install matplotlib`).
+### a. Polymer Structure
 
-Let's create a directory to save our plots:
+To visualize the structure of the largest polymer formed:
 
 ```python
-from pathlib import Path
-
-output_dir = Path("simulation_results")
-output_dir.mkdir(exist_ok=True)
-```
-
-### Polymer Structure
-
-You can visualize the structure of the largest polymer chain formed during the simulation.
-
-```python title="visualize_structure.py"
-from polysim import visualize_polymer
+from polymcsim import visualize_polymer
 import matplotlib.pyplot as plt
 
 fig = visualize_polymer(
@@ -110,12 +103,12 @@ fig = visualize_polymer(
 plt.show()
 ```
 
-### Molecular Weight Distribution
+### b. Molecular Weight Distribution
 
-Analyzing the molecular weight distribution (MWD) is crucial. You can plot it on both linear and log scales.
+You can also plot the molecular weight distribution (MWD) of the polymers.
 
-```python title="visualize_mwd.py"
-from polysim import plot_molecular_weight_distribution
+```python
+from polymcsim import plot_molecular_weight_distribution
 import matplotlib.pyplot as plt
 
 fig = plot_molecular_weight_distribution(
@@ -136,12 +129,12 @@ fig_log = plot_molecular_weight_distribution(
 plt.show()
 ```
 
-### Analysis Dashboard
+### c. Analysis Dashboard
 
-For a comprehensive overview, you can generate a single dashboard containing multiple analyses, including chain length distribution, conversion kinetics, and branching analysis.
+For a comprehensive overview, you can create an analysis dashboard.
 
-```python title="create_dashboard.py"
-from polysim import create_analysis_dashboard
+```python
+from polymcsim import create_analysis_dashboard
 import matplotlib.pyplot as plt
 
 fig = create_analysis_dashboard(
@@ -153,12 +146,12 @@ fig = create_analysis_dashboard(
 plt.show()
 ```
 
-## 4. Exporting Data
+## 5. Exporting Data
 
-Finally, you can export the raw polymer data to CSV files for further analysis in other tools.
+Finally, you can export the polymer data to CSV files for further analysis.
 
-```python title="export_data.py"
-from polysim import export_polymer_data
+```python
+from polymcsim import export_polymer_data
 
 export_files = export_polymer_data(
     graph,
@@ -169,4 +162,6 @@ export_files = export_polymer_data(
 print(f"Exported {len(export_files)} data files to {output_dir.resolve()}")
 ```
 
-This concludes the getting started tutorial. You have learned how to define a polymer system, run a simulation, and use the visualization and data export capabilities of `polysim`.
+This will create `polymer_analysis_summary.csv` and `polymer_analysis_chain_data.csv`.
+
+Congratulations! You've successfully run a simulation and used the basic visualization and data export capabilities of `polymcsim`.

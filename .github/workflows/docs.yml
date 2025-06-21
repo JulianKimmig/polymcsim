@@ -30,7 +30,7 @@ jobs:
       - name: Install docs dependencies
         run: |
           python -m pip install --upgrade uv
-          uv sync
+          uv sync --all-extras
 
       - name: Build documentation
         run: uv run mkdocs build --strict --verbose

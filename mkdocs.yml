@@ -1,7 +1,7 @@
-site_name: PolySim
-site_url: https://juliankimmig.github.io/polysim/
-repo_url: https://github.com/JulianKimmig/polysim
-repo_name: JulianKimmig/polysim
+site_name: PolyMCSim
+site_url: https://juliankimmig.github.io/polymcsim/
+repo_url: https://github.com/JulianKimmig/polymcsim
+repo_name: JulianKimmig/polymcsim
 edit_uri: edit/main/docs/
 
 theme:

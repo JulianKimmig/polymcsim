@@ -1,5 +1,5 @@
 [project]
-name = "polysim"
+name = "polymcsim"
 version = "0.1.0"
 description = "A high-performance Python library for Monte Carlo polymer graph generation"
 authors = [
@@ -22,6 +22,15 @@ dependencies = [
     "mkdocstrings[python]>=0.29.1",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-cov>=4.0.0",
+    "pytest-timeout>=2.1.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+    "pytest-benchmark>=5.1.0",
+]
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -60,19 +69,9 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "benchmark_*.py"]
-addopts = "--cov=polysim --cov-report=html --timeout=300"
+addopts = "--cov=polymcsim --cov-report=html --timeout=300"
 timeout = 300
 
 [tool.flake8]
 max-line-length = 88
 extend-ignore = "E203"
-
-[dependency-groups]
-dev = [
-    "pytest>=8.4.1",
-    "pytest-cov>=4.0.0",
-    "pytest-timeout>=2.1.0",
-    "mypy>=1.0.0",
-    "pre-commit>=3.0.0",
-    "pytest-benchmark>=5.1.0",
-]
