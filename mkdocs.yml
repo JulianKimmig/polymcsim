@@ -1,7 +1,7 @@
 site_name: PolySim
-site_url: https://example.com/
-repo_url: https://github.com/user/polysim
-repo_name: user/polysim
+site_url: https://juliankimmig.github.io/polysim/
+repo_url: https://github.com/JulianKimmig/polysim
+repo_name: JulianKimmig/polysim
 edit_uri: edit/main/docs/
 
 theme:
