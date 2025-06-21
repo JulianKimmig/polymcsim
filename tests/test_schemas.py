@@ -3,7 +3,12 @@
 import pytest
 from pydantic import ValidationError
 
-from polysim.schemas import MonomerDef, ReactionSchema, SimParams, SimulationInput, SiteDef
+from polysim.schemas import (
+    MonomerDef,
+    ReactionSchema,
+    SimulationInput,
+    SiteDef,
+)
 
 
 def test_monomer_def_negative_count() -> None:
@@ -15,16 +20,8 @@ def test_monomer_def_negative_count() -> None:
 def test_simulation_input_good() -> None:
     """Test that a valid SimulationInput model can be created."""
     config = SimulationInput(
-        monomers=[
-            MonomerDef(name="Monomer", count=100, sites=[SiteDef(type="A")])
-        ],
-        reactions={
-            frozenset(["A", "A"]): ReactionSchema(
-                site1_final_status="CONSUMED",
-                site2_final_status="CONSUMED",
-                rate=1.0
-            )
-        }
+        monomers=[MonomerDef(name="Monomer", count=100, sites=[SiteDef(type="A")])],
+        reactions={frozenset(["A", "A"]): ReactionSchema(rate=1.0)},
     )
     assert len(config.monomers) == 1
     assert config.params.max_reactions == 1_000_000_000

@@ -39,8 +39,8 @@ monomer = MonomerDef(
 
 # When an A meets a B both sites are consumed (no activation products)
 reaction = ReactionSchema(
-    site1_final_status="CONSUMED",
-    site2_final_status="CONSUMED",
+
+
     rate=1.0,              # relative rate constant
 )
 

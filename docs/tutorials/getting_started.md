@@ -46,8 +46,8 @@ def create_branched_polymer_system():
         ],
         reactions={
             frozenset(["A", "B"]): ReactionSchema(
-                site1_final_status="CONSUMED",
-                site2_final_status="CONSUMED",
+
+
                 rate=1.0
             )
         },

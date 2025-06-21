@@ -1,8 +1,10 @@
 """Tests for step-growth polymerization simulations."""
 
+from pathlib import Path
+
 import networkx as nx
 import pytest
-from pathlib import Path
+from conftest import verify_visualization_outputs
 
 from polysim import (
     MonomerDef,
@@ -11,56 +13,50 @@ from polysim import (
     Simulation,
     SimulationInput,
     SiteDef,
-    plot_chain_length_distribution,
-    visualize_polymer,
     create_analysis_dashboard,
     plot_molecular_weight_distribution,
+    visualize_polymer,
 )
-from conftest import cleanup_figure, verify_visualization_outputs
 
 
 @pytest.fixture
 def step_growth_config() -> SimulationInput:
     """Provide a config for a typical step-growth (A2 + B2) polymerization.
-    
+
     Returns:
         Simulation configuration for step-growth polymerization.
+
     """
     return SimulationInput(
         monomers=[
             MonomerDef(
-                name="A2_Monomer", 
-                count=1000, 
+                name="A2_Monomer",
+                count=1000,
                 sites=[
                     SiteDef(type="A", status="ACTIVE"),
                     SiteDef(type="A", status="ACTIVE"),
-                ]
+                ],
             ),
             MonomerDef(
-                name="B2_Monomer", 
-                count=1000, 
+                name="B2_Monomer",
+                count=1000,
                 sites=[
                     SiteDef(type="B", status="ACTIVE"),
                     SiteDef(type="B", status="ACTIVE"),
-                ]
+                ],
             ),
         ],
-        reactions={
-            frozenset(["A", "B"]): ReactionSchema(
-                site1_final_status="CONSUMED",  
-                site2_final_status="CONSUMED",
-                rate=1.0
-            )
-        },
-        params=SimParams(max_reactions=1500, random_seed=42)
+        reactions={frozenset(["A", "B"]): ReactionSchema(rate=1.0)},
+        params=SimParams(max_reactions=1500, random_seed=42),
     )
 
 
 def test_simulation_run_step_growth(step_growth_config: SimulationInput) -> None:
     """Test that a step-growth simulation runs and produces a graph.
-    
+
     Args:
         step_growth_config: Step-growth polymerization configuration.
+
     """
     sim = Simulation(step_growth_config)
     graph, meta = sim.run()
@@ -69,7 +65,7 @@ def test_simulation_run_step_growth(step_growth_config: SimulationInput) -> None
     assert graph.number_of_nodes() == 2000
     assert graph.number_of_edges() > 0
     assert meta["reactions_completed"] <= step_growth_config.params.max_reactions
-    
+
     # Check node attributes
     for node_id, attrs in graph.nodes(data=True):
         assert "monomer_type" in attrs
@@ -80,47 +76,69 @@ def test_simulation_run_step_growth(step_growth_config: SimulationInput) -> None
     assert all(d <= 2 for d in degrees)
 
 
-def test_visualization_step_growth(step_growth_config: SimulationInput, plot_path: Path) -> None:
-    """Test the visualization functions for a step-growth polymer.
-    
+def test_visualization_step_growth(
+    step_growth_config: SimulationInput, plot_path: Path
+) -> None:
+    """Test visualization of a step-growth polymer.
+
     Args:
-        step_growth_config: Step-growth polymerization configuration.
+        step_growth_config: Configuration for a step-growth polymer.
+        plot_path: Path to save the plot.
+
     """
     sim = Simulation(step_growth_config)
     graph, metadata = sim.run()
 
     # Create a dashboard for comprehensive analysis
-    dashboard_fig = create_analysis_dashboard(
-        graph, 
-        metadata, 
-        title="Step-Growth Polymer Analysis",
-        save_path=plot_path / "step_growth_dashboard.png"
+    create_analysis_dashboard(
+        graph,
+        metadata,
+        save_path=str(plot_path / "step_growth_dashboard.png"),
     )
-    assert dashboard_fig is not None
-    cleanup_figure(dashboard_fig)
 
     # Test MWD plot
-    mwd_fig = plot_molecular_weight_distribution(
-        graph, 
-        title="Step-Growth Molecular Weight Distribution",
-        save_path=plot_path / "step_growth_mwd.png"
+    plot_molecular_weight_distribution(
+        graph, save_path=str(plot_path / "step_growth_mwd.png")
     )
-    assert mwd_fig is not None
-    cleanup_figure(mwd_fig)
 
     # Test polymer structure visualization of the largest polymer
-    structure_fig = visualize_polymer(
-        graph, 
-        component_index=0,
-        title="Largest Step-Growth Polymer",
-        save_path=plot_path / "step_growth_structure.png"
+    visualize_polymer(
+        graph,
+        save_path=str(plot_path / "step_growth_structure.png"),
     )
-    assert structure_fig is not None
-    cleanup_figure(structure_fig)
 
     # Verify files were created
-    verify_visualization_outputs([
-        plot_path / "step_growth_dashboard.png",
-        plot_path / "step_growth_mwd.png",
-        plot_path / "step_growth_structure.png",
-    ]) 
+    verify_visualization_outputs(
+        [
+            str(plot_path / "step_growth_dashboard.png"),
+            str(plot_path / "step_growth_mwd.png"),
+            str(plot_path / "step_growth_structure.png"),
+        ]
+    )
+
+
+def test_linear_polymer_mwd(tmp_path, step_growth_config: SimulationInput):
+    """Test the MWD of a linear polymer."""
+    step_growth_config.params.max_reactions = 14
+    sim = Simulation(step_growth_config)
+    graph, metadata = sim.run()
+
+    # Test MWD plotting
+    mwd_path = tmp_path / "mwd.png"
+    plot_molecular_weight_distribution(graph, save_path=str(mwd_path))
+    assert mwd_path.with_suffix(".png").exists()
+
+
+def test_visualize_linear_polymer(tmp_path, step_growth_config: SimulationInput):
+    """Test the visualization of a linear polymer."""
+    step_growth_config.params.max_reactions = 10
+    sim = Simulation(step_growth_config)
+    graph, metadata = sim.run()
+
+    # Test visualization
+    viz_path = tmp_path / "polymer.png"
+    visualize_polymer(
+        graph,
+        save_path=str(viz_path),
+    )
+    assert viz_path.with_suffix(".png").exists()

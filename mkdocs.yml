@@ -64,4 +64,4 @@ nav:
   - 'Explanation':
     - 'Overview': 'explanation/index.md'
     - 'Kinetic Monte Carlo Engine': 'explanation/kmc_engine.md'
-    - 'Polymerization Theory': 'explanation/theoretical_background.md' 
+    - 'Polymerization Theory': 'explanation/theoretical_background.md'

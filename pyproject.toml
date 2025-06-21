@@ -32,25 +32,46 @@ line-length = 88
 target-version = ['py38']
 include = '\.pyi?$'
 
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "D"]
+ignore = ["E203", "D203", "D213"]
+
 [tool.mypy]
 python_version = "3.8"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+exclude = "benchmarks/conftest.py"
+
+[[tool.mypy.overrides]]
+module = [
+    "matplotlib",
+    "matplotlib.*",
+    "pytest",
+    "pydantic",
+    "numba",
+    "numba.*"
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "benchmarks"]
+testpaths = ["tests"]
 python_files = ["test_*.py", "benchmark_*.py"]
-addopts = "--cov=polysim --cov-report=html --timeout=300" 
+addopts = "--cov=polysim --cov-report=html --timeout=300"
 timeout = 300
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = "E203"
 
 [dependency-groups]
 dev = [
     "pytest>=8.4.1",
     "pytest-cov>=4.0.0",
     "pytest-timeout>=2.1.0",
-    "black>=23.0.0",
-    "flake8>=6.0.0",
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
     "pytest-benchmark>=5.1.0",

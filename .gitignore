@@ -48,6 +48,6 @@ build/
 *.pyc
 
 # Environment variables
-.env 
+.env
 tests/test_output
 benchmarks/test_output

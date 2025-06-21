@@ -1,6 +1,10 @@
 """Benchmark for radical polymerization simulations."""
 
+from pathlib import Path
+
 import pytest
+from pytest_benchmark.fixture import BenchmarkFixture
+
 from polysim import (
     MonomerDef,
     ReactionSchema,
@@ -11,8 +15,9 @@ from polysim import (
     create_analysis_dashboard,
 )
 
+
 def create_radical_sim_config(n_monomers: int, n_initiators: int) -> SimulationInput:
-    """Creates a simulation config for radical polymerization."""
+    """Create a simulation config for radical polymerization."""
     return SimulationInput(
         monomers=[
             MonomerDef(
@@ -32,44 +37,40 @@ def create_radical_sim_config(n_monomers: int, n_initiators: int) -> SimulationI
         reactions={
             # Initiation
             frozenset(["I", "M_in"]): ReactionSchema(
-                site1_final_status="CONSUMED",
-                site2_final_status="CONSUMED",
                 activation_map={"M_out": "R"},
                 rate=1.0,
             ),
             # Propagation
             frozenset(["R", "M_in"]): ReactionSchema(
-                site1_final_status="CONSUMED",
-                site2_final_status="CONSUMED",
                 activation_map={"M_out": "R"},
                 rate=100.0,
             ),
             # Termination
             frozenset(["R", "R"]): ReactionSchema(
-                site1_final_status="CONSUMED",
-                site2_final_status="CONSUMED",
                 rate=10.0,
             ),
         },
         params=SimParams(
             max_reactions=n_initiators + n_monomers,
             random_seed=42,
-            name=f"radical_poly_{n_monomers}"
+            name=f"radical_poly_{n_monomers}",
         ),
     )
 
+
 @pytest.mark.parametrize(
-    "n_monomers",
-    [100, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000]
+    "n_monomers", [100, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000]
 )
-def test_radical_polymerization_scaling(benchmark, n_monomers,plot_path):
+def test_radical_polymerization_scaling(
+    benchmark: BenchmarkFixture, n_monomers: int, plot_path: Path
+) -> None:
     """Benchmark radical polymerization with increasing numbers of monomers."""
     n_initiators = n_monomers // 20  # Keep initiator ratio constant
     config = create_radical_sim_config(n_monomers, n_initiators)
     sim = Simulation(config)
-    
+
     # The benchmark fixture will run this function multiple times
-    graph, metadata = benchmark(sim.run) 
+    graph, metadata = benchmark(sim.run)
 
     # plot dashboard
     create_analysis_dashboard(
@@ -77,5 +78,4 @@ def test_radical_polymerization_scaling(benchmark, n_monomers,plot_path):
         metadata,
         title="Cross-linked Polymer Analysis",
         save_path=plot_path / "crosslinked_polymer_dashboard.png",
-    )   
-
+    )
