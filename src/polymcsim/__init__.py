@@ -1,6 +1,14 @@
 """PolyMCsim - Monte Carlo Polymer Graph Generation Library."""
 
-from .schemas import MonomerDef, ReactionSchema, SimParams, SimulationInput, SiteDef
+from .schemas import (
+    MonomerDef,
+    Polymer,
+    ReactionSchema,
+    SimParams,
+    SimulationInput,
+    SimulationResult,
+    SiteDef,
+)
 from .simulation import Simulation, run_batch, run_simulation
 from .visualization import (
     create_analysis_dashboard,
@@ -30,4 +38,6 @@ __all__ = [
     "plot_branching_analysis",
     "create_analysis_dashboard",
     "export_polymer_data",
+    "Polymer",
+    "SimulationResult",
 ]

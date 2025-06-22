@@ -2,10 +2,22 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any, Dict, List, Literal
 
 import networkx as nx
-from pydantic import BaseModel, ConfigDict, Field
+import numpy as np
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+
+__all__ = [
+    "SiteDef",
+    "MonomerDef",
+    "ReactionSchema",
+    "SimParams",
+    "SimulationInput",
+    "Polymer",
+    "SimulationResult",
+]
 
 # --- 1. Pydantic Models for User Input and Validation ---
 
@@ -104,6 +116,60 @@ class SimulationInput(BaseModel):
 # --- 2. Pydantic Models for Simulation Output ---
 
 
+class Polymer(BaseModel):
+    """Represents a single polymer chain.
+
+    This is a connected component in the simulation graph.
+    """
+
+    id: int = Field(..., description="A unique identifier for this polymer chain.")
+    graph: nx.Graph = Field(
+        ..., description="The graph structure of this specific polymer chain."
+    )
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @property
+    def num_monomers(self) -> int:
+        """The number of monomer units in this polymer (degree of polymerization)."""
+        return self.graph.number_of_nodes()
+
+    @property
+    def molecular_weight(self) -> float:
+        """The total molar mass of this polymer chain (g/mol)."""
+        return sum(
+            data.get("molar_mass", 100.0) for _, data in self.graph.nodes(data=True)
+        )
+
+    @property
+    def branch_points(self) -> int:
+        """The number of branch points (nodes with degree > 2)."""
+        return sum(1 for _, degree in self.graph.degree() if degree > 2)
+
+    @property
+    def is_linear(self) -> bool:
+        """Checks if the polymer is linear (maximum degree is 2 or less)."""
+        if not self.graph:
+            return True
+        degrees = [d for _, d in self.graph.degree()]
+        return max(degrees) <= 2 if degrees else True
+
+    @property
+    def composition(self) -> Dict[str, int]:
+        """Return the monomer composition of the polymer as a dictionary."""
+        types = [data["monomer_type"] for _, data in self.graph.nodes(data=True)]
+        return dict(Counter(types))
+
+    def get_nodes_by_type(self) -> Dict[str, Any]:
+        """Return nodes of the polymer graph grouped by monomer type."""
+        nodes = {}
+        for node, data in self.graph.nodes(data=True):
+            if data["monomer_type"] not in nodes:
+                nodes[data["monomer_type"]] = []
+            nodes[data["monomer_type"]].append(node)
+        return nodes
+
+
 class SimulationResult(BaseModel):
     """Holds the results of a single simulation run.
 
@@ -120,4 +186,140 @@ class SimulationResult(BaseModel):
     config: "SimulationInput"
     error: str | None = None
 
+    _polymers_cache: List[Polymer] | None = PrivateAttr(default=None)
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    def get_polymers(self) -> List["Polymer"]:
+        """Extract individual polymer chains from the main simulation graph.
+
+        This method identifies connected components in the simulation graph, filters
+        out unreacted monomers (components with a single node), and returns a
+        list of `Polymer` objects. The result is cached after the first call.
+
+        Returns:
+            A list of `Polymer` objects, sorted from largest to smallest.
+
+        """
+        if self._polymers_cache is not None:
+            return self._polymers_cache
+
+        if self.graph is None:
+            self._polymers_cache = []
+            return self._polymers_cache
+
+        # Find all connected components
+        components = list(nx.connected_components(self.graph))
+
+        # Create Polymer objects for components that are actual polymers (size > 1)
+        polymers = []
+        for component_nodes in components:
+            if len(component_nodes) > 1:
+                # Create a subgraph for the component. .copy() is important!
+                subgraph = self.graph.subgraph(component_nodes).copy()
+                polymers.append(Polymer(id=len(polymers), graph=subgraph))  # temp id
+
+        # Sort polymers by size (number of monomers) in descending order
+        polymers.sort(key=lambda p: p.num_monomers, reverse=True)
+
+        # Assign final IDs based on sorted order
+        for i, p in enumerate(polymers):
+            p.id = i
+
+        self._polymers_cache = polymers
+        return self._polymers_cache
+
+    def get_largest_polymer(self) -> "Polymer" | None:
+        """Return the largest polymer chain from the simulation result.
+
+        Returns:
+            The largest `Polymer` object, or None if no polymers were formed.
+
+        """
+        polymers = self.get_polymers()
+        return polymers[0] if polymers else None
+
+    def get_unreacted_monomers(self) -> List[Dict[str, Any]]:
+        """Identify monomers that have not participated in any reactions.
+
+        An unreacted monomer is represented as an isolated node in the graph
+        (i.e., its degree is 0).
+
+        Returns:
+            A list of dictionaries, where each dictionary contains the
+            attributes of an unreacted monomer node (e.g., `monomer_type`).
+
+        """
+        if self.graph is None:
+            return []
+
+        isolated_nodes = [node for node, degree in self.graph.degree() if degree == 0]
+        return [{**self.graph.nodes[node], "id": node} for node in isolated_nodes]
+
+    def get_unreacted_monomer_composition(self) -> Dict[str, int]:
+        """Count the number of unreacted monomers of each type.
+
+        Returns:
+            A dictionary mapping monomer type to its unreacted count.
+
+        """
+        unreacted = self.get_unreacted_monomers()
+        types = [m["monomer_type"] for m in unreacted if "monomer_type" in m]
+        return dict(Counter(types))
+
+    def get_average_molecular_weights(self) -> Dict[str, float]:
+        """Calculate Mn, Mw, and PDI for the polymer mixture.
+
+        Returns:
+            A dictionary with keys 'Mn', 'Mw', and 'PDI'. Returns zero values
+            if no polymers were formed.
+
+        """
+        polymers = self.get_polymers()
+        if not polymers:
+            return {"Mn": 0.0, "Mw": 0.0, "PDI": 0.0}
+
+        molar_masses = np.array([p.molecular_weight for p in polymers])
+
+        total_mass = np.sum(molar_masses)
+        num_chains = len(molar_masses)
+
+        mn = total_mass / num_chains
+        mw = np.sum(molar_masses**2) / total_mass if total_mass > 0 else 0.0
+        pdi = mw / mn if mn > 0 else 0.0
+
+        return {"Mn": mn, "Mw": mw, "PDI": pdi}
+
+    def summary(self) -> Dict[str, Any]:
+        """Provide a summary of the simulation results.
+
+        Returns:
+            A dictionary containing key metrics like conversion, number of
+            polymers, and average molecular weights.
+
+        """
+        if self.error:
+            return {"error": self.error}
+
+        polymers = self.get_polymers()
+        mw_data = self.get_average_molecular_weights()
+
+        summary_data = {
+            "simulation_name": self.config.params.name,
+            "final_conversion": self.metadata.get("final_conversion", 0.0)
+            if self.metadata
+            else 0.0,
+            "reactions_completed": self.metadata.get("reactions_completed", 0)
+            if self.metadata
+            else 0.0,
+            "num_polymers": len(polymers),
+            "num_monomers_in_polymers": sum(p.num_monomers for p in polymers),
+            "num_unreacted_monomers": len(self.get_unreacted_monomers()),
+            "unreacted_composition": self.get_unreacted_monomer_composition(),
+            "Mn": mw_data["Mn"],
+            "Mw": mw_data["Mw"],
+            "PDI": mw_data["PDI"],
+            "wall_time_seconds": self.metadata.get("wall_time_seconds", 0.0)
+            if self.metadata
+            else 0.0,
+        }
+        return summary_data
