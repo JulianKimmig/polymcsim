@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List, Literal, Optional
 
 import networkx as nx
 import numpy as np
@@ -185,6 +185,7 @@ class SimulationResult(BaseModel):
     metadata: Dict[str, Any] | None = None
     config: "SimulationInput"
     error: str | None = None
+    final_state: Optional[Dict[str, Any]] = None
 
     _polymers_cache: List[Polymer] | None = PrivateAttr(default=None)
     model_config = ConfigDict(arbitrary_types_allowed=True)
