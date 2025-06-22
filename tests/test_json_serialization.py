@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test script to verify JSON serialization of SimulationInput."""
 
-from src.polymcsim.schemas import (
+from polymcsim.schemas import (
     MonomerDef,
     ReactionSchema,
     SimParams,
