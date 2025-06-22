@@ -450,8 +450,22 @@ def run_simulation(config: SimulationInput) -> SimulationResult:
         "final_conversion": final_conversion,
         "num_components": nx.number_connected_components(graph),
     }
+    final_state = {
+        "sites_data": sites_data,
+        "monomer_data": monomer_data,
+        "available_sites_active": available_sites_active,
+        "available_sites_dormant": available_sites_dormant,
+        "site_position_map_active": site_position_map_active,
+        "site_position_map_dormant": site_position_map_dormant,
+        "reaction_channels": reaction_channels,
+        "rate_constants": rate_constants,
+        "is_ad_reaction_channel": is_ad_reaction_channel,
+        "is_self_reaction": is_self_reaction,
+    }
 
-    return SimulationResult(graph=graph, metadata=metadata, config=config)
+    return SimulationResult(
+        graph=graph, metadata=metadata, config=config, final_state=final_state
+    )
 
 
 def run_batch(
