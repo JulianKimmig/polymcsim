@@ -10,14 +10,14 @@ from typing import Dict, List, Optional
 import networkx as nx
 import optuna
 
-from polymcsim import (
+from ..schemas import (
     MonomerDef,
     ReactionSchema,
     SimParams,
-    Simulation,
     SimulationInput,
     SiteDef,
 )
+from ..simulation import Simulation
 
 
 class PolymerSearchOptimizer:
