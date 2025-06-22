@@ -277,6 +277,7 @@ def test_dendrimer_like_structure(plot_path: Path) -> None:
 
     A -> B-B reactions from a central core.
     """
+    init_site_count = 4
     sim_input = SimulationInput(
         monomers=[
             # Central core with 4 reactive 'A' sites
@@ -284,50 +285,49 @@ def test_dendrimer_like_structure(plot_path: Path) -> None:
                 name="Core",
                 count=1,
                 sites=[
-                    SiteDef(type="A", status="ACTIVE"),
-                    SiteDef(type="A", status="ACTIVE"),
-                    SiteDef(type="A", status="ACTIVE"),
-                    SiteDef(type="A", status="ACTIVE"),
+                    SiteDef(type="A", status="ACTIVE") for _ in range(init_site_count)
                 ],
             ),
             # AB2 monomer: one 'A' to react with core, two 'B's for next gen
             MonomerDef(
-                name="AB2_Gen1",
-                count=60,
+                name="B1",
+                count=init_site_count,
                 sites=[
-                    SiteDef(type="B_Head", status="DORMANT"),
-                    SiteDef(type="B_Tail_1", status="DORMANT"),
-                    SiteDef(type="B_Tail_2", status="DORMANT"),
+                    SiteDef(type="B1_Head", status="ACTIVE"),
+                    SiteDef(type="B1_Tail", status="ACTIVE"),
+                    SiteDef(type="B1_Tail", status="ACTIVE"),
+                ],
+            ),
+            MonomerDef(
+                name="B2",
+                count=init_site_count * 2,
+                sites=[
+                    SiteDef(type="B2_Head", status="ACTIVE"),
+                    SiteDef(type="B2_Tail", status="ACTIVE"),
+                    SiteDef(type="B2_Tail", status="ACTIVE"),
+                ],
+            ),
+            MonomerDef(
+                name="B3",
+                count=init_site_count * 2 * 2,
+                sites=[
+                    SiteDef(type="B3_Head", status="ACTIVE"),
+                    SiteDef(type="B3_Tail", status="ACTIVE"),
+                    SiteDef(type="B3_Tail", status="ACTIVE"),
                 ],
             ),
         ],
         reactions={
             # Core reacts with the head of the AB2 monomer
-            frozenset(["A", "B_Head"]): ReactionSchema(
+            frozenset(["A", "B1_Head"]): ReactionSchema(
                 rate=10.0,
-                activation_map={
-                    "B_Tail_1": "B_Gen2_Active",
-                    "B_Tail_2": "B_Gen2_Active",
-                },
             ),
-            # Active generation 2 sites can react with other AB2 monomers
-            frozenset(["B_Gen2_Active", "B_Head"]): ReactionSchema(
-                rate=5.0,
-                activation_map={
-                    "B_Tail_1": "B_Gen3_Active",
-                    "B_Tail_2": "B_Gen3_Active",
-                },
+            frozenset(["B1_Tail", "B2_Head"]): ReactionSchema(
+                rate=10.0,
             ),
-            frozenset(["B_Gen3_Active", "B_Head"]): ReactionSchema(
-                rate=2.0,
-                activation_map={
-                    "B_Tail_1": "B_Gen4_Active",
-                    "B_Tail_2": "B_Gen4_Active",
-                },
+            frozenset(["B2_Tail", "B3_Head"]): ReactionSchema(
+                rate=10.0,
             ),
-            # Add termination to stop runaway reactions
-            frozenset(["B_Gen2_Active", "B_Gen2_Active"]): ReactionSchema(rate=0.1),
-            frozenset(["B_Gen3_Active", "B_Gen3_Active"]): ReactionSchema(rate=0.1),
         },
         params=SimParams(random_seed=42, name="dendrimer_structure"),
     )
@@ -355,7 +355,6 @@ def test_dendrimer_like_structure(plot_path: Path) -> None:
     structure_fig = visualize_polymer(
         graph,
         title="Dendrimer-like Structure",
-        highlight_nodes=[core_node],
         node_outline_color="gold",
         save_path=plot_path / "dendrimer_structure.png",
     )

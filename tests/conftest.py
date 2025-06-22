@@ -39,10 +39,12 @@ def verify_visualization_outputs(save_paths: List[Union[str, Path]]) -> None:
         assert os.path.exists(path), f"Expected visualization file {path} to be created"
 
 
-@pytest.fixture(scope="session")
-def plot_path(tmp_path_factory: pytest.TempPathFactory) -> Generator[Path, None, None]:
+@pytest.fixture(scope="function")
+def plot_path(request: FixtureRequest) -> Generator[Path, None, None]:
     """Create a temporary directory for saving plots for a test session."""
-    path = tmp_path_factory.mktemp("plots")
+    path = Path(__file__).parent / "test_output" / request.node.name
+    path.mkdir(exist_ok=True, parents=True)
+
     yield path
 
 
@@ -51,7 +53,7 @@ def get_plot_path(request: FixtureRequest, plot_path: Path) -> Path:
     """Create a subdirectory for a specific test function to save plots."""
     test_name = str(request.node.name)
     test_plot_path = plot_path / test_name
-    test_plot_path.mkdir(exist_ok=True)
+    test_plot_path.mkdir(exist_ok=True, parents=True)
     return test_plot_path
 
 
