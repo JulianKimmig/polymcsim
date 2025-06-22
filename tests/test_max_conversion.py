@@ -39,7 +39,8 @@ def test_max_conversion_stops_simulation() -> None:
         config = SimulationInput(monomers=monomers, reactions=reactions, params=params)
 
         sim = Simulation(config)
-        graph, metadata = sim.run()
+        result = sim.run()
+        graph, metadata = result.graph, result.metadata
 
         # Check that final conversion is close to but not exceeding max_conversion
         final_conversion = metadata["final_conversion"]
@@ -79,7 +80,8 @@ def test_max_conversion_default() -> None:
     config = SimulationInput(monomers=monomers, reactions=reactions, params=params)
 
     sim = Simulation(config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    metadata = result.metadata
 
     # With AA polymerization, should reach high conversion
     final_conversion = metadata["final_conversion"]
@@ -101,7 +103,8 @@ def test_max_conversion_zero() -> None:
     config = SimulationInput(monomers=monomers, reactions=reactions, params=params)
 
     sim = Simulation(config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     # Should have no reactions
     assert metadata["final_conversion"] == 0.0

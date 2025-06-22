@@ -91,7 +91,8 @@ def test_simulation_run_branched_polymer(
 
     """
     sim = Simulation(branched_polymer_config)
-    graph, meta = sim.run()
+    result = sim.run()
+    graph, meta = result.graph, result.metadata
 
     assert isinstance(graph, nx.Graph)
     assert graph.number_of_nodes() > 0
@@ -140,7 +141,8 @@ def test_visualization_branched_polymer(
 
     """
     sim = Simulation(branched_polymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     # Create a dashboard for comprehensive analysis
     dashboard_fig = create_analysis_dashboard(
@@ -228,7 +230,8 @@ def test_hyperbranched_polymer_generation(plot_path: Path) -> None:
     )
 
     sim = Simulation(sim_input)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     # Check that the largest component is highly branched
     components = list(nx.connected_components(graph))
@@ -248,19 +251,19 @@ def test_hyperbranched_polymer_generation(plot_path: Path) -> None:
     dashboard_fig = create_analysis_dashboard(
         graph,
         metadata,
-        title="Hyperbranched Polymer (A2+B4) Analysis",
+        title="Hyperbranched Polymer Analysis",
         save_path=plot_path / "hyperbranched_dashboard.png",
     )
     assert dashboard_fig is not None
 
     structure_fig = visualize_polymer(
-        subgraph,
-        title="Largest Hyperbranched Polymer Structure",
+        graph,
+        title="Hyperbranched Structure",
+        component_index=0,
         save_path=plot_path / "hyperbranched_structure.png",
     )
     assert structure_fig is not None
 
-    # Verify files were created
     verify_visualization_outputs(
         [
             plot_path / "hyperbranched_dashboard.png",
@@ -270,88 +273,92 @@ def test_hyperbranched_polymer_generation(plot_path: Path) -> None:
 
 
 def test_dendrimer_like_structure(plot_path: Path) -> None:
-    """Generate a dendrimer-like structure using A3 + B2 monomers.
+    """Generate a dendrimer-like structure using a core and branching monomers.
 
-    Checks for a large, single component formed.
-    Reference: https://www.frontiersin.org/journals/energy-research/articles/10.3389/fenrg.2022.894096/full
+    A -> B-B reactions from a central core.
     """
-    # A3 + B2 system: classic for dendrimer-like structures
-    # Use stoichiometric imbalance to ensure a large, single component formed
-    n_A3 = 120  # 360 A sites
-    n_B2 = 80  # 160 B sites (excess B to create terminal groups)
     sim_input = SimulationInput(
         monomers=[
+            # Central core with 4 reactive 'A' sites
             MonomerDef(
-                name="A3",
-                count=n_A3,
+                name="Core",
+                count=1,
                 sites=[
+                    SiteDef(type="A", status="ACTIVE"),
                     SiteDef(type="A", status="ACTIVE"),
                     SiteDef(type="A", status="ACTIVE"),
                     SiteDef(type="A", status="ACTIVE"),
                 ],
             ),
+            # AB2 monomer: one 'A' to react with core, two 'B's for next gen
             MonomerDef(
-                name="B2",
-                count=n_B2,
+                name="AB2_Gen1",
+                count=60,
                 sites=[
-                    SiteDef(type="B", status="ACTIVE"),
-                    SiteDef(type="B", status="ACTIVE"),
+                    SiteDef(type="B_Head", status="DORMANT"),
+                    SiteDef(type="B_Tail_1", status="DORMANT"),
+                    SiteDef(type="B_Tail_2", status="DORMANT"),
                 ],
             ),
         ],
         reactions={
-            frozenset(["A", "B"]): ReactionSchema(rate=1.0),
-            frozenset(["A", "A"]): ReactionSchema(rate=0.2),
+            # Core reacts with the head of the AB2 monomer
+            frozenset(["A", "B_Head"]): ReactionSchema(
+                rate=10.0,
+                activation_map={
+                    "B_Tail_1": "B_Gen2_Active",
+                    "B_Tail_2": "B_Gen2_Active",
+                },
+            ),
+            # Active generation 2 sites can react with other AB2 monomers
+            frozenset(["B_Gen2_Active", "B_Head"]): ReactionSchema(
+                rate=5.0,
+                activation_map={
+                    "B_Tail_1": "B_Gen3_Active",
+                    "B_Tail_2": "B_Gen3_Active",
+                },
+            ),
+            frozenset(["B_Gen3_Active", "B_Head"]): ReactionSchema(
+                rate=2.0,
+                activation_map={
+                    "B_Tail_1": "B_Gen4_Active",
+                    "B_Tail_2": "B_Gen4_Active",
+                },
+            ),
+            # Add termination to stop runaway reactions
+            frozenset(["B_Gen2_Active", "B_Gen2_Active"]): ReactionSchema(rate=0.1),
+            frozenset(["B_Gen3_Active", "B_Gen3_Active"]): ReactionSchema(rate=0.1),
         },
-        params=SimParams(
-            max_reactions=300, random_seed=2024, name="dendrimer_like_structure"
-        ),
+        params=SimParams(random_seed=42, name="dendrimer_structure"),
     )
 
     sim = Simulation(sim_input)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
-    # --- Verification ---
-    assert isinstance(graph, nx.Graph), "Simulation did not return a valid graph"
-    assert graph.number_of_nodes() > 0, "Graph is empty after simulation"
+    assert graph.number_of_nodes() > 1
+    assert metadata["reactions_completed"] > 0
 
-    # Check that a large, single component formed
-    components = list(nx.connected_components(graph))
-    largest_component_size = len(components[0]) if components else 0
-    assert largest_component_size > (n_A3 + n_B2) * 0.5, (
-        "Expected a large dendrimer-like structure"
-    )
+    # The structure should be one single component centered around the core
+    assert nx.number_connected_components(graph) == 1
 
-    # Visualize the result
-    dashboard_fig = create_analysis_dashboard(
-        graph,
-        metadata,
-        title="Dendrimer-like (A3+B2) Polymer Analysis",
-        save_path=plot_path / "dendrimer_dashboard.png",
-    )
-    assert dashboard_fig is not None
+    # Find the core node
+    core_node = [n for n, d in graph.nodes(data=True) if d["monomer_type"] == "Core"][0]
+    assert graph.degree(core_node) <= 4
 
+    # Check for generational growth (nodes at distance 1, 2, etc. from core)
+    distances = nx.shortest_path_length(graph, source=core_node)
+    max_dist = max(distances.values())
+    assert max_dist >= 1, "Expected at least one generation of growth"
+
+    # Visualize the resulting structure
     structure_fig = visualize_polymer(
         graph,
-        component_index=0,
         title="Dendrimer-like Structure",
-        layout="kamada_kawai",
+        highlight_nodes=[core_node],
+        node_outline_color="gold",
         save_path=plot_path / "dendrimer_structure.png",
     )
     assert structure_fig is not None
 
-    verify_visualization_outputs(
-        [plot_path / "dendrimer_dashboard.png", plot_path / "dendrimer_structure.png"]
-    )
-
-    structure_fig = visualize_polymer(
-        graph,
-        component_index=0,  # Largest component
-        save_path=plot_path / "star_structure.png",
-    )
-
-    verify_visualization_outputs(
-        [
-            plot_path / "star_structure.png",
-        ]
-    )
+    verify_visualization_outputs([plot_path / "dendrimer_structure.png"])

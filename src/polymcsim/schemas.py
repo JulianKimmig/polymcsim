@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Literal
+from typing import Any, Dict, List, Literal
 
+import networkx as nx
 from pydantic import BaseModel, ConfigDict, Field
 
 # --- 1. Pydantic Models for User Input and Validation ---
@@ -98,3 +99,25 @@ class SimulationInput(BaseModel):
     params: SimParams = Field(
         default_factory=SimParams, description="Simulation parameters."
     )
+
+
+# --- 2. Pydantic Models for Simulation Output ---
+
+
+class SimulationResult(BaseModel):
+    """Holds the results of a single simulation run.
+
+    Attributes:
+        graph: The final polymer network structure.
+        metadata: A dictionary of metadata about the simulation run.
+        config: The input configuration that generated this result.
+        error: An error message if the simulation failed.
+
+    """
+
+    graph: nx.Graph | None = None
+    metadata: Dict[str, Any] | None = None
+    config: "SimulationInput"
+    error: str | None = None
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)

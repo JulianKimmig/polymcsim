@@ -57,7 +57,8 @@ def test_crosslinked_network_formation(
 ) -> None:
     """Test that a highly cross-linked network forms a giant component."""
     sim = Simulation(crosslinked_polymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     assert isinstance(graph, nx.Graph)
     assert graph.number_of_nodes() > 0

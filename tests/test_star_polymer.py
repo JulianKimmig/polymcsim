@@ -72,7 +72,8 @@ def test_star_polymer_generation(
     # Use living polymerization approach to prevent inter-star connections
 
     sim = Simulation(star_polymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     # --- Verification ---
     assert isinstance(graph, nx.Graph), "Simulation did not return a valid graph"
@@ -155,7 +156,8 @@ def test_star_polymer_mwd(tmp_path, star_polymer_config: SimulationInput):
     """Test the MWD of a star polymer."""
     # ... existing code ...
     sim = Simulation(star_polymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph = result.graph
 
     # Test MWD plotting
     mwd_path = tmp_path / "mwd.png"
@@ -167,7 +169,8 @@ def test_visualize_star_polymer(tmp_path, star_polymer_config: SimulationInput):
     """Test the visualization of a star polymer."""
     # ... existing code ...
     sim = Simulation(star_polymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph = result.graph, result.metadata
 
     # Test visualization
     viz_path = tmp_path / "polymer.png"
@@ -184,7 +187,8 @@ def test_analysis_dashboard_star_polymer(
     """Test the analysis dashboard for a star polymer."""
     # ... existing code ...
     sim = Simulation(star_polymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     # Test dashboard generation
     dashboard_path = tmp_path / "dashboard.png"

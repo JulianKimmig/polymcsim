@@ -82,7 +82,8 @@ def test_simulation_run_gradient_polymer(
 
     """
     sim = Simulation(gradient_polymer_config)
-    graph, meta = sim.run()
+    result = sim.run()
+    graph, meta = result.graph, result.metadata
 
     assert isinstance(graph, nx.Graph)
     assert graph.number_of_nodes() > 0
@@ -126,7 +127,8 @@ def test_visualization_gradient_polymer(
 
     """
     sim = Simulation(gradient_polymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     # Create a dashboard for comprehensive analysis
     dashboard_fig = create_analysis_dashboard(

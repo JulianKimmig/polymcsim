@@ -76,7 +76,8 @@ def test_block_copolymer_formation(
 ):
     """Test for the formation of block copolymers."""
     sim = Simulation(block_copolymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     assert metadata["reactions_completed"] > 0
     components = list(nx.connected_components(graph))
@@ -168,7 +169,8 @@ def test_random_copolymer_formation(
 ):
     """Test for the formation of random copolymers."""
     sim = Simulation(random_copolymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     create_analysis_dashboard(
         graph,
@@ -236,7 +238,8 @@ def test_alternating_copolymer_formation(
 ):
     """Test for the formation of strictly alternating copolymers."""
     sim = Simulation(alternating_copolymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     create_analysis_dashboard(
         graph,

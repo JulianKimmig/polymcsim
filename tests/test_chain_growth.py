@@ -64,7 +64,8 @@ def test_simulation_run_chain_growth(chain_growth_config: SimulationInput) -> No
 
     """
     sim = Simulation(chain_growth_config)
-    graph, meta = sim.run()
+    result = sim.run()
+    graph, meta = result.graph, result.metadata
 
     assert isinstance(graph, nx.Graph)
     assert graph.number_of_nodes() == sum(m.count for m in chain_growth_config.monomers)
@@ -95,7 +96,8 @@ def test_visualization_chain_growth(
 
     """
     sim = Simulation(chain_growth_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     # Create a dashboard for comprehensive analysis
     dashboard_fig = create_analysis_dashboard(

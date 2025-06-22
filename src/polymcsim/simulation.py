@@ -2,7 +2,7 @@
 
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import networkx as nx
 import numpy as np
@@ -12,7 +12,7 @@ from numba.typed import List as NumbaList
 from tqdm.auto import tqdm
 
 from .core import STATUS_ACTIVE, STATUS_CONSUMED, STATUS_DORMANT, run_kmc_loop
-from .schemas import SimulationInput
+from .schemas import SimulationInput, SimulationResult
 
 
 def _validate_config(config: SimulationInput) -> bool:
@@ -141,7 +141,7 @@ def _calculate_conversion(
     return conversion
 
 
-def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
+def run_simulation(config: SimulationInput) -> SimulationResult:
     """Run a polymer generation simulation.
 
     This function acts as a bridge between the user-friendly Pydantic/Python
@@ -151,8 +151,8 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
         config: Complete simulation configuration.
 
     Returns:
-        Tuple of (graph, metadata) where graph is the polymer structure and
-        metadata contains simulation statistics.
+        A `SimulationResult` object containing the polymer graph, simulation
+        metadata, and the original input configuration.
 
     Raises:
         ValueError: If configuration validation fails.
@@ -449,15 +449,14 @@ def run_simulation(config: SimulationInput) -> Tuple[nx.Graph, Dict[str, Any]]:
         "final_simulation_time": final_time,
         "final_conversion": final_conversion,
         "num_components": nx.number_connected_components(graph),
-        "config": config.model_dump(),
     }
 
-    return graph, metadata
+    return SimulationResult(graph=graph, metadata=metadata, config=config)
 
 
 def run_batch(
     configs: List[SimulationInput], max_workers: Optional[int] = None
-) -> Dict[str, Tuple[Optional[nx.Graph], Dict[str, Any]]]:
+) -> Dict[str, SimulationResult]:
     """Run a batch of simulations in parallel using a process pool.
 
     Args:
@@ -466,10 +465,13 @@ def run_batch(
                     If None, it defaults to the number of CPUs on the machine.
 
     Returns:
-        A dictionary mapping simulation names to their (graph, metadata) results.
+        A dictionary mapping simulation names to their `SimulationResult` objects.
+        If a simulation fails, the `error` field of the result will be populated.
 
     """
     results = {}
+    name_to_config = {cfg.params.name: cfg for cfg in configs}
+
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         future_to_name = {
             executor.submit(run_simulation, config): config.params.name
@@ -481,11 +483,11 @@ def run_batch(
         ):
             name = future_to_name[future]
             try:
-                graph, metadata = future.result()
-                results[name] = (graph, metadata)
+                results[name] = future.result()
             except Exception as exc:
-                print(f"{name} generated an exception: {exc}")
-                results[name] = (None, {"error": str(exc)})
+                print(f"'{name}' generated an exception: {exc}")
+                config = name_to_config[name]
+                results[name] = SimulationResult(config=config, error=str(exc))
     return results
 
 
@@ -500,42 +502,38 @@ class Simulation:
 
         """
         self.config = config
-        self.graph: Optional[nx.Graph] = None
-        self.metadata: Optional[Dict[str, Any]] = None
+        self.result: Optional[SimulationResult] = None
 
-    def run(self) -> Tuple[nx.Graph, Dict[str, Any]]:
+    def run(self) -> SimulationResult:
         """Execute the simulation.
 
         This method calls the core Numba-optimized Kinetic Monte Carlo engine
         and runs the simulation to completion based on the provided configuration.
+        It stores the result internally and also returns it.
 
         Returns:
-            A tuple containing:
-            - nx.Graph: The final polymer network structure.
-            - dict: A dictionary of metadata about the simulation run.
+            A `SimulationResult` object containing the final polymer network,
+            metadata, and the input configuration.
 
         """
-        graph, metadata = run_simulation(self.config)
-        self.graph = graph
-        self.metadata = metadata
-        if not self.graph:
-            raise ValueError("Simulation did not produce a graph.")
-        return self.graph, self.metadata
+        self.result = run_simulation(self.config)
+        return self.result
 
     def get_graph(self) -> Optional[nx.Graph]:
         """Return the resulting polymer graph.
 
         Returns:
-            The polymer graph, or None if the simulation has not been run.
+            The polymer graph, or None if the simulation has not been run or failed.
 
         """
-        return self.graph
+        return self.result.graph if self.result else None
 
     def get_metadata(self) -> Optional[Dict[str, Any]]:
         """Return metadata from the simulation run.
 
         Returns:
-            The metadata dictionary, or None if the simulation has not been run.
+            The metadata dictionary, or None if the simulation has not been
+            run or failed.
 
         """
-        return self.metadata
+        return self.result.metadata if self.result else None

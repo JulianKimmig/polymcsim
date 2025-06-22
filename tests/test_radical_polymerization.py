@@ -99,7 +99,8 @@ def test_mma_radical_polymerization_mwd(
     type of polymerization (~1.5-2.0).
     """
     sim = Simulation(mma_radical_config)
-    graph, _ = sim.run()
+    result = sim.run()
+    graph, _ = result.graph, result.metadata
 
     pdi = calculate_pdi(graph)
 

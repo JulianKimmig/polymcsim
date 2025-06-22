@@ -59,7 +59,8 @@ def test_simulation_run_step_growth(step_growth_config: SimulationInput) -> None
 
     """
     sim = Simulation(step_growth_config)
-    graph, meta = sim.run()
+    result = sim.run()
+    graph, meta = result.graph, result.metadata
 
     assert isinstance(graph, nx.Graph)
     assert graph.number_of_nodes() == 2000
@@ -87,7 +88,8 @@ def test_visualization_step_growth(
 
     """
     sim = Simulation(step_growth_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     # Create a dashboard for comprehensive analysis
     create_analysis_dashboard(
@@ -121,7 +123,8 @@ def test_linear_polymer_mwd(tmp_path, step_growth_config: SimulationInput):
     """Test the MWD of a linear polymer."""
     step_growth_config.params.max_reactions = 14
     sim = Simulation(step_growth_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph = result.graph
 
     # Test MWD plotting
     mwd_path = tmp_path / "mwd.png"
@@ -133,7 +136,8 @@ def test_visualize_linear_polymer(tmp_path, step_growth_config: SimulationInput)
     """Test the visualization of a linear polymer."""
     step_growth_config.params.max_reactions = 10
     sim = Simulation(step_growth_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph = result.graph
 
     # Test visualization
     viz_path = tmp_path / "polymer.png"

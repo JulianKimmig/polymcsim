@@ -59,7 +59,8 @@ def branched_polymer_config() -> SimulationInput:
 def test_molecular_weight_distribution(branched_polymer_config, plot_path: Path):
     """Test the molecular weight distribution plot."""
     sim = Simulation(branched_polymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph = result.graph
 
     # Test normal scale
     fig = plot_molecular_weight_distribution(
@@ -88,7 +89,8 @@ def test_molecular_weight_distribution(branched_polymer_config, plot_path: Path)
 def test_conversion_analysis(branched_polymer_config, plot_path: Path):
     """Test the conversion analysis plot."""
     sim = Simulation(branched_polymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     # Test without edge data
     fig = plot_conversion_analysis(
@@ -119,7 +121,8 @@ def test_conversion_analysis(branched_polymer_config, plot_path: Path):
 def test_branching_analysis(branched_polymer_config, plot_path: Path):
     """Test the branching analysis plot."""
     sim = Simulation(branched_polymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph = result.graph
 
     fig = plot_branching_analysis(
         graph,
@@ -134,7 +137,8 @@ def test_branching_analysis(branched_polymer_config, plot_path: Path):
 def test_analysis_dashboard(branched_polymer_config, plot_path: Path):
     """Test the comprehensive analysis dashboard."""
     sim = Simulation(branched_polymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     fig = create_analysis_dashboard(
         graph,
@@ -150,7 +154,8 @@ def test_analysis_dashboard(branched_polymer_config, plot_path: Path):
 def test_export_polymer_data(branched_polymer_config, plot_path: Path):
     """Test data export functionality."""
     sim = Simulation(branched_polymer_config)
-    graph, metadata = sim.run()
+    result = sim.run()
+    graph, metadata = result.graph, result.metadata
 
     output_files = export_polymer_data(
         graph, metadata, output_dir=plot_path, prefix="test_polymer"
