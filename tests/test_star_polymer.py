@@ -170,7 +170,7 @@ def test_visualize_star_polymer(tmp_path, star_polymer_config: SimulationInput):
     # ... existing code ...
     sim = Simulation(star_polymer_config)
     result = sim.run()
-    graph = result.graph, result.metadata
+    graph = result.graph
 
     # Test visualization
     viz_path = tmp_path / "polymer.png"
