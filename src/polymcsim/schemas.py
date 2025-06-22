@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import networkx as nx
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    field_serializer,
+    field_validator,
+)
 
 __all__ = [
     "SiteDef",
@@ -93,6 +100,21 @@ class SimParams(BaseModel):
         default=42, description="Random seed for reproducible results."
     )
 
+    @field_serializer("max_time")
+    def serialize_max_time(self, max_time: float) -> Union[float, str]:
+        """Serialize inf values as 'inf' string for JSON compatibility."""
+        if max_time == float("inf"):
+            return "inf"
+        return max_time
+
+    @field_validator("max_time", mode="before")
+    @classmethod
+    def validate_max_time(cls, v: Any) -> float:
+        """Convert 'inf' string back to float('inf') during validation."""
+        if v == "inf":
+            return float("inf")
+        return v
+
 
 class SimulationInput(BaseModel):
     """Complete input configuration for a PolyMCsim simulation.
@@ -112,6 +134,22 @@ class SimulationInput(BaseModel):
         default_factory=SimParams, description="Simulation parameters."
     )
 
+    @field_serializer("reactions")
+    def serialize_reactions(
+        self, reactions: Dict[frozenset[str], ReactionSchema]
+    ) -> Dict[str, ReactionSchema]:
+        """Serialize frozenset keys into strings for JSON compatibility."""
+        return {"|".join(k): v for k, v in reactions.items()}
+
+    @field_validator("reactions", mode="before")
+    @classmethod
+    def validate_reactions(cls, v: Any) -> Dict[frozenset[str], ReactionSchema]:
+        """Validate and convert string keys back to frozensets."""
+        return {
+            (frozenset(k.split("|")) if isinstance(k, str) else k): v
+            for k, v in v.items()
+        }
+
 
 # --- 2. Pydantic Models for Simulation Output ---
 
@@ -128,6 +166,7 @@ class Polymer(BaseModel):
     )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+    _molar_mass_cache: float | None = PrivateAttr(default=None)
 
     @property
     def num_monomers(self) -> int:
@@ -137,9 +176,13 @@ class Polymer(BaseModel):
     @property
     def molecular_weight(self) -> float:
         """The total molar mass of this polymer chain (g/mol)."""
-        return sum(
+        if self._molar_mass_cache is not None:
+            return self._molar_mass_cache
+
+        self._molar_mass_cache = sum(
             data.get("molar_mass", 100.0) for _, data in self.graph.nodes(data=True)
         )
+        return self._molar_mass_cache
 
     @property
     def branch_points(self) -> int:

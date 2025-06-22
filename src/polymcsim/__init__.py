@@ -1,5 +1,10 @@
 """PolyMCsim - Monte Carlo Polymer Graph Generation Library."""
 
+from .polymer_generation import (
+    PolymerSearchOptimizer,
+    VarParam,
+    generate_polymers_with_mass,
+)
 from .schemas import (
     MonomerDef,
     Polymer,
@@ -40,4 +45,7 @@ __all__ = [
     "export_polymer_data",
     "Polymer",
     "SimulationResult",
+    "generate_polymers_with_mass",
+    "VarParam",
+    "PolymerSearchOptimizer",
 ]
