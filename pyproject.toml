@@ -31,6 +31,7 @@ dev = [
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
     "pytest-benchmark>=5.1.0",
+    "commitizen>=4.8.3",
 ]
 
 [build-system]
@@ -76,3 +77,10 @@ timeout = 300
 [tool.flake8]
 max-line-length = 88
 extend-ignore = "E203"
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "$version"
+version_scheme = "pep440"
+version_provider = "uv"
+update_changelog_on_bump = true
