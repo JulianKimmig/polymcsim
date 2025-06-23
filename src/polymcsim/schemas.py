@@ -58,6 +58,51 @@ class MonomerDef(BaseModel):
         ..., description="List of reactive sites on this monomer."
     )
 
+    @classmethod
+    def chaingrowth_initiator(
+        cls,
+        name: str,
+        count: int,
+        molar_mass: float,
+        n_sites: int = 1,
+        additional_sites: Optional[List[SiteDef]] = None,
+        active_site_name: str = "R",
+    ):
+        """Create a monomer for chain growth initiator."""
+        return cls(
+            name=name,
+            count=count,
+            molar_mass=molar_mass,
+            sites=[
+                SiteDef(type=active_site_name, status="ACTIVE") for _ in range(n_sites)
+            ]
+            + (additional_sites or []),
+        )
+
+    @classmethod
+    def chaingrowth_monomer(
+        cls,
+        name: str,
+        count: int,
+        molar_mass: float,
+        additional_sites: Optional[List[SiteDef]] = None,
+        head_name: str = "R_Head",
+        tail_name: str = "R_Tail",
+    ):
+        """Create a monomer for chain growth."""
+        monomer = cls(
+            name=name,
+            count=count,
+            molar_mass=molar_mass,
+            sites=[
+                SiteDef(type=head_name, status="DORMANT"),  # Head for chain growth
+                SiteDef(type=tail_name, status="DORMANT"),  # Tail for chain growth
+            ],
+        )
+        if additional_sites:
+            monomer.sites.extend(additional_sites)
+        return monomer
+
 
 class ReactionSchema(BaseModel):
     """Defines the outcome and rate of a reaction between two site types."""
@@ -69,6 +114,35 @@ class ReactionSchema(BaseModel):
     )
 
     model_config = ConfigDict(extra="forbid")
+
+    @classmethod
+    def chaingrowth_initiation(
+        cls,
+        initiator: MonomerDef,
+        monomers: List[MonomerDef],
+        rate: Union[float, List[float]] = 10.0,
+        initiator_site: int = 0,
+        monomer_site: int = 0,
+        monomer_activated_side: int = 1,
+        active_site_type: Optional[str] = None,
+    ):
+        """Create a reaction schema for chain growth initiation."""
+        if isinstance(rate, float):
+            rate = [rate] * len(monomers)
+        if active_site_type is None:
+            active_site_type = initiator.sites[initiator_site].type
+        reactions = {
+            frozenset(
+                [initiator.sites[initiator_site].type, monomer.sites[monomer_site].type]
+            ): cls(
+                rate=rate[i],
+                activation_map={
+                    monomer.sites[monomer_activated_side].type: active_site_type
+                },
+            )
+            for i, monomer in enumerate(monomers)
+        }
+        return reactions
 
 
 class SimParams(BaseModel):
