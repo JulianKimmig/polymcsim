@@ -1,6 +1,6 @@
 [project]
 name = "polymcsim"
-version = "0.3.0"
+version = "0.3.1"
 description = "A high-performance Python library for Monte Carlo polymer graph generation"
 authors = [
   { name = "Your Name", email = "your.email@example.com" }

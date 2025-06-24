@@ -1,3 +1,9 @@
+## 0.3.1 (2025-06-24)
+
+### Fix
+
+- **polymer**: 🐛 add default values to generate_polymers_with_mass parameters
+
 ## 0.3.0 (2025-06-23)
 
 ### Feat
