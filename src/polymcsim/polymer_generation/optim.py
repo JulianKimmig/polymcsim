@@ -5,7 +5,7 @@ that match a target molar mass within a given tolerance.
 """
 
 import random
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import networkx as nx
 import optuna
@@ -58,6 +58,8 @@ class PolymerSearchOptimizer:
         self.max_tries = max_tries
         self.found_polymers: Optional[List[nx.Graph]] = []
         self.raise_on_failure = raise_on_failure
+        self._best_err = float("inf")
+        self.best_sim_config: Optional[SimulationInput] = None
 
     def _objective(self, trial: optuna.Trial) -> float:
         """Objective function for Optuna to maximize."""
@@ -91,18 +93,23 @@ class PolymerSearchOptimizer:
             ]
         )
 
+        err = abs(mn - self.target_polymer_molar_mass)
+        if err < self._best_err:
+            self._best_err = err
+            self.best_sim_config = sim_config
+
         if len(self.found_polymers) >= self.min_num_polymers_to_find:
             trial.set_user_attr("success", True)
 
         # Optuna maximizes this value
-        return abs(mn - self.target_polymer_molar_mass)
+        return err
 
     def _callback(self, study: optuna.Study, trial: optuna.Trial):
         """Stop the study when enough polymers are found."""
         if trial.user_attrs.get("success", False):
             study.stop()
 
-    def find(self) -> Optional[List[nx.Graph]]:
+    def find(self) -> Tuple[List[nx.Graph], Optional[SimulationInput]]:
         """Run the optimization and return the found polymers."""
         study = optuna.create_study(direction="minimize")
         study.optimize(
@@ -121,7 +128,7 @@ class PolymerSearchOptimizer:
         self.found_polymers.sort(
             key=lambda x: abs(x.molecular_weight - self.target_polymer_molar_mass)
         )
-        return self.found_polymers
+        return self.found_polymers, self.best_sim_config
 
 
 class VarParam:
@@ -176,7 +183,7 @@ def generate_polymers_with_mass(
     tolerance_percent: float = 5.0,
     max_tries: int = 100,
     raise_on_failure: bool = True,
-):
+) -> Tuple[List[nx.Graph], Optional[SimulationInput]]:
     """Run a simulation and save polymer graphs that match the mass criteria.
 
     Args:
@@ -242,9 +249,9 @@ def generate_polymers_with_mass(
         raise_on_failure=raise_on_failure,
     )
 
-    found_polymers = optimizer.find()
+    found_polymers, best_sim_config = optimizer.find()
 
-    return found_polymers
+    return found_polymers, best_sim_config
 
 
 def main():
@@ -339,7 +346,7 @@ def main():
         params=sim_params,
     )
 
-    generate_polymers_with_mass(
+    found_polymers, best_sim_config = generate_polymers_with_mass(
         sim_config=config,
         var_params=params,
         min_num_polymers_to_find=args.num_polymers,
