@@ -1,3 +1,9 @@
+## 0.4.0 (2025-06-24)
+
+### Feat
+
+- **optim**: ✨ return best simulation config from polymer optimization
+
 ## 0.3.1 (2025-06-24)
 
 ### Fix
