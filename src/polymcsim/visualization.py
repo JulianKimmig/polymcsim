@@ -7,14 +7,15 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
-from matplotlib.collections import LineCollection
+from matplotlib.collections import LineCollection, PatchCollection
+from matplotlib.patches import Circle
 
 
 def visualize_polymer(
     graph: nx.Graph,
     figsize: Tuple[int, int] = (12, 8),
-    layout: str = "spring",
-    node_size: int = 300,
+    layout: Optional[str] = None,
+    node_size_factor: float = 1.0,
     node_color_by: str = "monomer_type",
     node_outline_color: str = "black",
     with_labels: bool = False,
@@ -29,7 +30,7 @@ def visualize_polymer(
         graph: The NetworkX Graph to visualize.
         figsize: Figure size (width, height) in inches.
         layout: Graph layout algorithm ('spring', 'kamada_kawai', 'circular').
-        node_size: Size of nodes in the visualization.
+        node_size_factor: Factor to scale node sizes relative to edge lengths.
         node_color_by: Node attribute to use for coloring ('monomer_type' or None).
         node_outline_color: Color of the node outline/border.
         with_labels: Whether to show node labels with monomer type.
@@ -98,16 +99,27 @@ def visualize_polymer(
 
     # --- Layout ---
     pos = None
+    pos = nx.circular_layout(plot_graph)
     if layout == "spring":
-        pos = nx.spring_layout(plot_graph, k=0.1, iterations=50, seed=seed)
+        pos = nx.spring_layout(plot_graph, k=0.1, iterations=50, seed=seed, pos=pos)
     elif layout == "kamada_kawai":
-        pos = nx.kamada_kawai_layout(plot_graph)
+        pos = nx.kamada_kawai_layout(plot_graph, pos=pos)
     elif layout == "circular":
-        pos = nx.circular_layout(plot_graph)
+        pass
+    elif layout is None:
+        pos = nx.kamada_kawai_layout(plot_graph, pos=pos)
+        # edge_lengths = [
+        #     np.linalg.norm(np.array(pos[u]) - np.array(pos[v]))
+        #     for u, v in plot_graph.edges()
+        # ]
+        # median_edge_length = np.median(edge_lengths)
+        # pos = nx.spring_layout(
+        #     plot_graph, k=median_edge_length, iterations=1, seed=seed, pos=pos
+        # )
     else:
         raise ValueError(f"Unknown layout: {layout}")
 
-    # --- Node Colors ---
+    # --- Color Logic (before drawing) ---
     if node_color_by == "monomer_type":
         node_colors_map = [
             plot_graph.nodes[node].get("monomer_type", "gray")
@@ -118,38 +130,69 @@ def visualize_polymer(
             np.linspace(0, 1, len(unique_types))
         )
         color_dict = dict(zip(unique_types, color_palette))
-        node_colors = [color_dict[c] for c in node_colors_map]
+        node_face_colors = [color_dict[c] for c in node_colors_map]
     else:
-        node_colors = "skyblue"
+        node_face_colors = "skyblue"
 
-    # --- Drawing ---
-    nx.draw_networkx_nodes(
-        plot_graph,
-        pos,
-        node_color=node_colors,
-        node_size=node_size,
-        edgecolors=node_outline_color,
-        linewidths=1.5,
-        ax=ax,
-    )
+    # --- Edge and Node Size Calculation (in Data Coordinates) ---
+    node_radius = 0.05  # Default radius if there are no edges
+    if plot_graph.number_of_edges() > 0:
+        edge_lengths = [
+            np.linalg.norm(np.array(pos[u]) - np.array(pos[v]))
+            for u, v in plot_graph.edges()
+        ]
+        median_edge_length = np.median(edge_lengths)
+        # The desired radius of each node is half the median edge length.
+        # This is in DATA COORDINATES, just like the 'pos' values.
+        node_radius = median_edge_length / 2.0
 
+    # --- Drawing with Patches (The Corrected Approach) ---
+
+    # 1. Draw Edges first (so they are behind the nodes)
     if plot_graph.number_of_edges() > 0:
         edge_pos = np.array([(pos[e[0]], pos[e[1]]) for e in plot_graph.edges()])
         edge_collection = LineCollection(
-            edge_pos, colors="black", linewidths=1.5, alpha=0.8
+            edge_pos, colors="black", linewidths=1.5, alpha=0.8, zorder=1
         )
         ax.add_collection(edge_collection)
 
+    # 2. Draw Nodes using a PatchCollection for performance and correct scaling
+    patches = [Circle(pos[node], radius=node_radius) for node in plot_graph.nodes()]
+
+    node_collection = PatchCollection(
+        patches,
+        facecolor=node_face_colors,
+        edgecolor=node_outline_color,
+        linewidth=1.5,
+        zorder=2,  # Ensure nodes are drawn on top of edges
+    )
+    ax.add_collection(node_collection)
+
+    # --- Set Axis Limits AFTER calculating sizes ---
+    # This ensures the plot is framed correctly around the drawn objects.
+    all_x = np.array([p[0] for p in pos.values()])
+    all_y = np.array([p[1] for p in pos.values()])
+
+    padding = node_radius * 1.5  # Add padding based on the node size
+    x_min, x_max = np.min(all_x) - padding, np.max(all_x) + padding
+    y_min, y_max = np.min(all_y) - padding, np.max(all_y) + padding
+
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(y_min, y_max)
+    ax.set_aspect("equal", adjustable="box")  # Crucial for circles to look like circles
+
+    # --- Labels, Title, and Legend ---
     if with_labels:
-        labels = {
-            node: f"{plot_graph.nodes[node]['monomer_type']}"
-            for node in plot_graph.nodes()
-        }
         nx.draw_networkx_labels(
-            plot_graph, pos, labels=labels, font_size=8, ax=ax, font_color="black"
+            plot_graph,
+            pos,
+            labels={n: plot_graph.nodes[n]["monomer_type"] for n in plot_graph.nodes()},
+            font_size=8,
+            ax=ax,
+            font_color="black",
+            verticalalignment="center_baseline",
         )
 
-    # --- Title and Legend ---
     plot_title = title if title else "Polymer Structure"
     if component_index is not None:
         plot_title += f" (Component {component_index}, {len(plot_graph)} monomers)"
@@ -170,7 +213,6 @@ def visualize_polymer(
         ]
         ax.legend(handles=legend_elements, title="Monomer Types", loc="best")
 
-    ax.set_aspect("equal")
     plt.tight_layout()
     plt.axis("off")
 
