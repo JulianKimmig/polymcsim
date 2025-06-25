@@ -11,6 +11,129 @@ from matplotlib.collections import LineCollection, PatchCollection
 from matplotlib.patches import Circle
 
 
+def _convex_hull_numpy(points):
+    """Compute the convex hull of 2D points using the Monotone Chain algorithm."""
+    if len(points) <= 3:
+        return points
+    # Sort points lexicographically (by x, then by y)
+    points = points[np.lexsort((points[:, 1], points[:, 0]))]
+
+    def cross_product(p1, p2, p3):
+        return (p2[0] - p1[0]) * (p3[1] - p1[1]) - (p2[1] - p1[1]) * (p3[0] - p1[0])
+
+    lower_hull = []
+    for p in points:
+        while (
+            len(lower_hull) >= 2
+            and cross_product(lower_hull[-2], lower_hull[-1], p) <= 0
+        ):
+            lower_hull.pop()
+        lower_hull.append(p)
+
+    upper_hull = []
+    for p in reversed(points):
+        while (
+            len(upper_hull) >= 2
+            and cross_product(upper_hull[-2], upper_hull[-1], p) <= 0
+        ):
+            upper_hull.pop()
+        upper_hull.append(p)
+
+    return np.array(lower_hull[:-1] + upper_hull[:-1])
+
+
+# Main function
+def rotate_points_for_max_aspect_ratio(points):
+    """Find the orientation that maximizes the aspect ratio of the bounding box.
+
+    Given a set of 2D points, this function finds the orientation that maximizes
+    the aspect ratio of their bounding box. It then rotates the points around
+    their center to align with this orientation, making the shape as "wide"
+    as possible.
+
+    Args:
+        points (np.ndarray): A NumPy array of shape (N, 2).
+
+    Returns:
+        np.ndarray: A new NumPy array of shape (N, 2) containing the rotated points.
+                    Returns an empty array if input has no points.
+                    Returns the original point if input has only one point.
+
+    """
+    if not isinstance(points, np.ndarray) or points.ndim != 2 or points.shape[1] != 2:
+        raise ValueError("Input must be a NumPy array with shape (N, 2).")
+
+    num_points = len(points)
+    if num_points < 2:
+        return points  # No rotation is possible or needed
+
+    # Calculate the geometric center of the points
+    center = points.mean(axis=0)
+
+    # --- Step 1: Find the optimal rotation angle ---
+    best_angle = 0
+
+    # Check for collinearity. If points are on a line, we orient that line horizontally.
+    # We use matrix rank, which is a robust way to check for linear dependence.
+    centered_points = points - center
+    if np.linalg.matrix_rank(centered_points, tol=1e-8) < 2:
+        # Find the two points farthest apart to define the line's direction
+        diff = points[:, np.newaxis, :] - points[np.newaxis, :, :]
+        dist_sq = np.sum(diff**2, axis=-1)
+        i, j = np.unravel_index(np.argmax(dist_sq), dist_sq.shape)
+
+        edge_vec = points[j] - points[i]
+        # Angle needed to make this vector horizontal
+        best_angle = -np.arctan2(edge_vec[1], edge_vec[0])
+
+    else:
+        # If not collinear, find the convex hull and check its edges
+        hull_points = _convex_hull_numpy(points)
+        max_aspect_ratio = -1.0
+
+        for i in range(len(hull_points)):
+            p1 = hull_points[i]
+            p2 = hull_points[(i + 1) % len(hull_points)]
+            edge_vec = p2 - p1
+
+            # Angle to align the edge with the x-axis
+            angle = -np.arctan2(edge_vec[1], edge_vec[0])
+
+            # Build the temporary rotation matrix
+            temp_rot_matrix = np.array(
+                [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
+            )
+
+            # Virtually rotate points to find the bounding box in this orientation
+            rotated_temp = (temp_rot_matrix @ centered_points.T).T
+            min_xy = rotated_temp.min(axis=0)
+            max_xy = rotated_temp.max(axis=0)
+            width = max_xy[0] - min_xy[0]
+            height = max_xy[1] - min_xy[1]
+
+            if width == 0 or height == 0:
+                continue
+
+            aspect_ratio = max(width / height, height / width)
+
+            if aspect_ratio > max_aspect_ratio:
+                max_aspect_ratio = aspect_ratio
+                best_angle = angle
+
+    # --- Step 2: Rotate the original points by the best angle around their center ---
+    rot_matrix = np.array(
+        [
+            [np.cos(best_angle), -np.sin(best_angle)],
+            [np.sin(best_angle), np.cos(best_angle)],
+        ]
+    )
+
+    # Apply rotation: translate to origin, rotate, then translate back
+    rotated_points = (rot_matrix @ centered_points.T).T + center
+
+    return rotated_points
+
+
 def visualize_polymer(
     graph: nx.Graph,
     figsize: Tuple[int, int] = (12, 8),
@@ -103,10 +226,12 @@ def visualize_polymer(
     if layout == "spring":
         pos = nx.spring_layout(plot_graph, k=0.1, iterations=50, seed=seed, pos=pos)
     elif layout == "kamada_kawai":
+        pos = nx.spring_layout(plot_graph, k=0.1, iterations=50, seed=seed, pos=pos)
         pos = nx.kamada_kawai_layout(plot_graph, pos=pos)
     elif layout == "circular":
         pass
     elif layout is None:
+        pos = nx.spring_layout(plot_graph, k=0.1, iterations=50, seed=seed, pos=pos)
         pos = nx.kamada_kawai_layout(plot_graph, pos=pos)
         # edge_lengths = [
         #     np.linalg.norm(np.array(pos[u]) - np.array(pos[v]))
@@ -118,6 +243,15 @@ def visualize_polymer(
         # )
     else:
         raise ValueError(f"Unknown layout: {layout}")
+
+    pos = dict(
+        zip(
+            plot_graph.nodes(),
+            rotate_points_for_max_aspect_ratio(
+                np.array([pos[n] for n in plot_graph.nodes()])
+            ),
+        )
+    )
 
     # --- Color Logic (before drawing) ---
     if node_color_by == "monomer_type":
@@ -144,7 +278,7 @@ def visualize_polymer(
         median_edge_length = np.median(edge_lengths)
         # The desired radius of each node is half the median edge length.
         # This is in DATA COORDINATES, just like the 'pos' values.
-        node_radius = median_edge_length / 2.0
+        node_radius = median_edge_length / 2.0 * node_size_factor
 
     # --- Drawing with Patches (The Corrected Approach) ---
 
