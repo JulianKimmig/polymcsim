@@ -164,6 +164,9 @@ class SimParams(BaseModel):
     max_reactions: int = Field(
         default=1_000_000_000, description="Maximum number of reaction events."
     )
+    chunk_size: int = Field(
+        default=1, description="Number of reactions to run in each chunk."
+    )
     max_conversion: float = Field(
         default=1.0,
         ge=0.0,

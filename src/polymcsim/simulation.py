@@ -188,6 +188,57 @@ def run_simulation(config: SimulationInput) -> SimulationResult:
     # monomer_data: [monomer_type_id, first_site_idx]
     monomer_data = np.zeros((total_monomers + 1, 2), dtype=np.int64)
 
+    # --- Vectorized Preprocessing ---
+
+    # 1. Prepare monomer data
+    monomer_counts = np.array([m.count for m in config.monomers])
+    monomer_type_ids = np.array([monomer_type_map[m.name] for m in config.monomers])
+    sites_per_monomer_type = np.array([len(m.sites) for m in config.monomers])
+
+    # Populate monomer_data using vectorized operations
+    if total_monomers > 0:
+        all_monomer_type_ids = np.repeat(monomer_type_ids, monomer_counts)
+        monomer_data[:total_monomers, 0] = all_monomer_type_ids
+
+        sites_per_instance = np.repeat(sites_per_monomer_type, monomer_counts)
+        monomer_data[:total_monomers, 1] = np.concatenate(
+            ([0], np.cumsum(sites_per_instance)[:-1])
+        )
+    monomer_data[total_monomers, 1] = total_sites  # Sentinel
+
+    # 2. Prepare site data
+    if total_sites > 0:
+        # Get properties for each site type
+        site_props = [
+            (
+                [site_type_map[s.type] for s in m.sites],
+                [
+                    STATUS_ACTIVE if s.status == "ACTIVE" else STATUS_DORMANT
+                    for s in m.sites
+                ],
+                list(range(len(m.sites))),
+            )
+            for m in config.monomers
+        ]
+
+        # Expand site properties for all monomer instances
+        all_site_type_ids = np.concatenate(
+            [props[0] * count for props, count in zip(site_props, monomer_counts)]
+        )
+        all_site_statuses = np.concatenate(
+            [props[1] * count for props, count in zip(site_props, monomer_counts)]
+        )
+        all_monomer_site_indices = np.concatenate(
+            [props[2] * count for props, count in zip(site_props, monomer_counts)]
+        )
+        all_monomer_ids = np.repeat(np.arange(total_monomers), sites_per_instance)
+
+        # Populate sites_data
+        sites_data[:, 0] = all_monomer_ids
+        sites_data[:, 1] = all_site_type_ids
+        sites_data[:, 2] = all_site_statuses
+        sites_data[:, 3] = all_monomer_site_indices
+
     # Pre-populate all possible keys in the NumbaDicts
     int_list_type = types.ListType(types.int64)
     available_sites_active = NumbaDict.empty(
@@ -202,43 +253,25 @@ def run_simulation(config: SimulationInput) -> SimulationResult:
     site_position_map_dormant = NumbaDict.empty(
         key_type=types.int64, value_type=types.int64
     )
-    for site_name, site_id in site_type_map.items():
+    for site_id in site_type_map.values():
         available_sites_active[site_id] = NumbaList.empty_list(types.int64)
         available_sites_dormant[site_id] = NumbaList.empty_list(types.int64)
 
-    current_monomer_id = 0
-    current_site_idx = 0
-    for monomer_def in config.monomers:
-        monomer_type_id = monomer_type_map[monomer_def.name]
-        for _ in range(monomer_def.count):
-            monomer_data[current_monomer_id, 0] = monomer_type_id
-            monomer_data[current_monomer_id, 1] = current_site_idx
-            for site_idx, site in enumerate(monomer_def.sites):
-                site_type_id = site_type_map[site.type]
-                status_int = (
-                    STATUS_ACTIVE if site.status == "ACTIVE" else STATUS_DORMANT
-                )
+    # 3. Populate available site lists from the vectorized sites_data
+    for site_idx in range(total_sites):
+        site_type_id = sites_data[site_idx, 1]
+        status_int = sites_data[site_idx, 2]
 
-                sites_data[current_site_idx] = [
-                    current_monomer_id,
-                    site_type_id,
-                    status_int,
-                    site_idx,
-                ]
+        if status_int == STATUS_ACTIVE:
+            site_list = available_sites_active[site_type_id]
+            site_list.append(site_idx)
+            site_position_map_active[site_idx] = len(site_list) - 1
+        elif status_int == STATUS_DORMANT:
+            site_list = available_sites_dormant[site_type_id]
+            site_list.append(site_idx)
+            site_position_map_dormant[site_idx] = len(site_list) - 1
 
-                # Populate initial available site lists and position maps
-                if status_int == STATUS_ACTIVE:
-                    site_list = available_sites_active[site_type_id]
-                    site_list.append(current_site_idx)
-                    site_position_map_active[current_site_idx] = len(site_list) - 1
-                elif status_int == STATUS_DORMANT:
-                    site_list = available_sites_dormant[site_type_id]
-                    site_list.append(current_site_idx)
-                    site_position_map_dormant[current_site_idx] = len(site_list) - 1
-
-                current_site_idx += 1
-            current_monomer_id += 1
-    monomer_data[total_monomers, 1] = total_sites  # Sentinel for size calculation
+    # --- End of Vectorized Preprocessing ---
 
     # Translate kinetics with canonical ordering
     # First, create a map of site types to their status for easy lookup
@@ -318,7 +351,9 @@ def run_simulation(config: SimulationInput) -> SimulationResult:
 
     # Run the core simulation in chunks to provide progress updates
     total_reactions_to_run = config.params.max_reactions
-    chunk_size = max(1, total_reactions_to_run // 100)  # Update 100 times
+    chunk_size = max(
+        1, total_reactions_to_run // config.params.chunk_size
+    )  # Update 100 times
 
     all_edges = []
     reactions_done_total = 0
