@@ -1,3 +1,10 @@
+## 0.6.0 (2025-06-25)
+
+### Feat
+
+- **visualization**: ✨ implement convex hull and aspect ratio optimization for point rotation
+- **core, simulation**: ✨ optimize data types and improve performance in KMC simulation
+
 ## 0.5.0 (2025-06-25)
 
 ### Feat
