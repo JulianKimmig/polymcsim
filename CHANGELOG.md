@@ -1,3 +1,10 @@
+## 0.5.0 (2025-06-25)
+
+### Feat
+
+- **simulation**: ✨ implement vectorized preprocessing for monomer and site data
+- **visualization**: ✨ enhance polymer visualization with improved layout and node rendering
+
 ## 0.4.0 (2025-06-24)
 
 ### Feat
