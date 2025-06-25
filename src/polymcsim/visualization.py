@@ -146,6 +146,7 @@ def visualize_polymer(
     seed: Optional[int] = None,
     component_index: Optional[Union[int, str]] = None,
     save_path: Optional[Union[str, Path]] = None,
+    close_fig: bool = True,
 ) -> plt.Figure:
     """Visualize a polymer graph with customizable styling.
 
@@ -164,6 +165,7 @@ def visualize_polymer(
                         - int: Plot the nth largest component (0 = largest).
                         - 'random': Plot a random component from chains with >1 monomer.
         save_path: If provided, saves the figure to this path.
+        close_fig: Whether to close the figure after saving.
 
     Returns:
         Matplotlib Figure object.
@@ -352,6 +354,9 @@ def visualize_polymer(
 
     if save_path:
         plt.savefig(save_path, bbox_inches="tight", dpi=300)
+
+    if close_fig:
+        plt.close(fig)
 
     return fig
 
