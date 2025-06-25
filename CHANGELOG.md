@@ -1,3 +1,10 @@
+## 0.7.0 (2025-06-26)
+
+### Feat
+
+- **core, simulation**: ✨ enhance activation handling in KMC simulation
+- **visualization**: ✨ add close_fig parameter to visualize_polymer
+
 ## 0.6.0 (2025-06-25)
 
 ### Feat
