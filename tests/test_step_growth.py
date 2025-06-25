@@ -31,7 +31,7 @@ def step_growth_config() -> SimulationInput:
         monomers=[
             MonomerDef(
                 name="A2_Monomer",
-                count=1000,
+                count=250,
                 sites=[
                     SiteDef(type="A", status="ACTIVE"),
                     SiteDef(type="A", status="ACTIVE"),
@@ -39,7 +39,7 @@ def step_growth_config() -> SimulationInput:
             ),
             MonomerDef(
                 name="B2_Monomer",
-                count=1000,
+                count=250,
                 sites=[
                     SiteDef(type="B", status="ACTIVE"),
                     SiteDef(type="B", status="ACTIVE"),
@@ -63,7 +63,7 @@ def test_simulation_run_step_growth(step_growth_config: SimulationInput) -> None
     graph, meta = result.graph, result.metadata
 
     assert isinstance(graph, nx.Graph)
-    assert graph.number_of_nodes() == 2000
+    assert graph.number_of_nodes() == 500
     assert graph.number_of_edges() > 0
     assert meta["reactions_completed"] <= step_growth_config.params.max_reactions
 

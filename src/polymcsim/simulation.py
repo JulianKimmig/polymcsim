@@ -142,22 +142,7 @@ def _calculate_conversion(
 
 
 def run_simulation(config: SimulationInput) -> SimulationResult:
-    """Run a polymer generation simulation.
-
-    This function acts as a bridge between the user-friendly Pydantic/Python
-    configuration and the high-performance Numba-JIT'd core.
-
-    Args:
-        config: Complete simulation configuration.
-
-    Returns:
-        A `SimulationResult` object containing the polymer graph, simulation
-        metadata, and the original input configuration.
-
-    Raises:
-        ValueError: If configuration validation fails.
-
-    """
+    """Run a polymer generation simulation."""
     print("--- PolyMCsim Simulation ---")
     print("0. Validating configuration...")
     _validate_config(config)
@@ -165,50 +150,43 @@ def run_simulation(config: SimulationInput) -> SimulationResult:
 
     np.random.seed(config.params.random_seed)
 
-    # Mappings from string names to integer IDs for Numba
+    # --- Mappings and Data Flattening ---
     all_site_types = set()
     for monomer in config.monomers:
         for site in monomer.sites:
             all_site_types.add(site.type)
-    # Collect all site types from reactions
     for pair, reaction_def in config.reactions.items():
         all_site_types.update(pair)
         all_site_types.update(reaction_def.activation_map.values())
 
-    # Create deterministic mappings
-    site_type_map = {name: i for i, name in enumerate(sorted(list(all_site_types)))}
-    monomer_type_map = {monomer.name: i for i, monomer in enumerate(config.monomers)}
+    site_type_map = {
+        name: np.int32(i) for i, name in enumerate(sorted(list(all_site_types)))
+    }
+    monomer_type_map = {
+        monomer.name: np.int32(i) for i, monomer in enumerate(config.monomers)
+    }
 
-    # Flatten data into NumPy arrays
     total_monomers = sum(monomer.count for monomer in config.monomers)
     total_sites = sum(monomer.count * len(monomer.sites) for monomer in config.monomers)
 
-    # sites_data: [monomer_id, site_type_id, status, monomer_site_idx]
-    sites_data = np.zeros((total_sites, 4), dtype=np.int64)
-    # monomer_data: [monomer_type_id, first_site_idx]
-    monomer_data = np.zeros((total_monomers + 1, 2), dtype=np.int64)
+    sites_data = np.zeros((total_sites, 4), dtype=np.int32)
+    monomer_data = np.zeros((total_monomers + 1, 2), dtype=np.int32)
 
-    # --- Vectorized Preprocessing ---
-
-    # 1. Prepare monomer data
+    # --- Vectorized Array Population ---
     monomer_counts = np.array([m.count for m in config.monomers])
     monomer_type_ids = np.array([monomer_type_map[m.name] for m in config.monomers])
     sites_per_monomer_type = np.array([len(m.sites) for m in config.monomers])
 
-    # Populate monomer_data using vectorized operations
     if total_monomers > 0:
         all_monomer_type_ids = np.repeat(monomer_type_ids, monomer_counts)
         monomer_data[:total_monomers, 0] = all_monomer_type_ids
-
         sites_per_instance = np.repeat(sites_per_monomer_type, monomer_counts)
         monomer_data[:total_monomers, 1] = np.concatenate(
             ([0], np.cumsum(sites_per_instance)[:-1])
         )
-    monomer_data[total_monomers, 1] = total_sites  # Sentinel
+    monomer_data[total_monomers, 1] = total_sites
 
-    # 2. Prepare site data
     if total_sites > 0:
-        # Get properties for each site type
         site_props = [
             (
                 [site_type_map[s.type] for s in m.sites],
@@ -220,8 +198,6 @@ def run_simulation(config: SimulationInput) -> SimulationResult:
             )
             for m in config.monomers
         ]
-
-        # Expand site properties for all monomer instances
         all_site_type_ids = np.concatenate(
             [props[0] * count for props, count in zip(site_props, monomer_counts)]
         )
@@ -232,100 +208,95 @@ def run_simulation(config: SimulationInput) -> SimulationResult:
             [props[2] * count for props, count in zip(site_props, monomer_counts)]
         )
         all_monomer_ids = np.repeat(np.arange(total_monomers), sites_per_instance)
-
-        # Populate sites_data
         sites_data[:, 0] = all_monomer_ids
         sites_data[:, 1] = all_site_type_ids
         sites_data[:, 2] = all_site_statuses
         sites_data[:, 3] = all_monomer_site_indices
 
-    # Pre-populate all possible keys in the NumbaDicts
-    int_list_type = types.ListType(types.int64)
+    # --- Numba Collections Population ---
+    int_list_type = types.ListType(types.int32)
     available_sites_active = NumbaDict.empty(
-        key_type=types.int64, value_type=int_list_type
+        key_type=types.int32, value_type=int_list_type
     )
     available_sites_dormant = NumbaDict.empty(
-        key_type=types.int64, value_type=int_list_type
+        key_type=types.int32, value_type=int_list_type
     )
     site_position_map_active = NumbaDict.empty(
-        key_type=types.int64, value_type=types.int64
+        key_type=types.int32, value_type=types.int32
     )
     site_position_map_dormant = NumbaDict.empty(
-        key_type=types.int64, value_type=types.int64
+        key_type=types.int32, value_type=types.int32
     )
-    for site_id in site_type_map.values():
-        available_sites_active[site_id] = NumbaList.empty_list(types.int64)
-        available_sites_dormant[site_id] = NumbaList.empty_list(types.int64)
 
-    # 3. Populate available site lists from the vectorized sites_data
-    for site_idx in range(total_sites):
-        site_type_id = sites_data[site_idx, 1]
-        status_int = sites_data[site_idx, 2]
+    all_site_indices = np.arange(total_sites, dtype=np.int32)
 
-        if status_int == STATUS_ACTIVE:
-            site_list = available_sites_active[site_type_id]
-            site_list.append(site_idx)
-            site_position_map_active[site_idx] = len(site_list) - 1
-        elif status_int == STATUS_DORMANT:
-            site_list = available_sites_dormant[site_type_id]
-            site_list.append(site_idx)
-            site_position_map_dormant[site_idx] = len(site_list) - 1
+    for site_type_id in site_type_map.values():
+        is_site_type = sites_data[:, 1] == site_type_id
 
-    # --- End of Vectorized Preprocessing ---
+        # Handle ACTIVE sites
+        active_mask = is_site_type & (sites_data[:, 2] == STATUS_ACTIVE)
+        active_indices = all_site_indices[active_mask]
+        # Create a typed list, handling the empty case to avoid TypeError
+        if active_indices.size == 0:
+            available_sites_active[site_type_id] = NumbaList.empty_list(types.int32)
+        else:
+            available_sites_active[site_type_id] = NumbaList(active_indices)
 
-    # Translate kinetics with canonical ordering
-    # First, create a map of site types to their status for easy lookup
+        if active_indices.size > 0:
+            # pos_map_chunk = _build_position_map_jit(active_indices)
+            pos_map_chunk = dict(
+                zip(active_indices, np.arange(len(active_indices), dtype=np.int32))
+            )
+            site_position_map_active.update(pos_map_chunk)
+
+        # Handle DORMANT sites
+        dormant_mask = is_site_type & (sites_data[:, 2] == STATUS_DORMANT)
+        dormant_indices = all_site_indices[dormant_mask]
+        # Create a typed list, handling the empty case to avoid TypeError
+        if dormant_indices.size == 0:
+            available_sites_dormant[site_type_id] = NumbaList.empty_list(types.int32)
+        else:
+            available_sites_dormant[site_type_id] = NumbaList(dormant_indices)
+
+        if dormant_indices.size > 0:
+            pos_map_chunk = dict(
+                zip(dormant_indices, np.arange(len(dormant_indices), dtype=np.int32))
+            )
+            site_position_map_dormant.update(pos_map_chunk)
+
+    # --- Kinetics Translation ---
     site_status_map: Dict[str, str] = {}
     for monomer in config.monomers:
         for site in monomer.sites:
             site_status_map.setdefault(site.type, site.status)
-    # Ensure types that only appear after activation are marked ACTIVE
     for schema in config.reactions.values():
         for new_type in schema.activation_map.values():
             site_status_map.setdefault(new_type, "ACTIVE")
 
-    # Build the reaction channel list with a guaranteed order
     reaction_channels_list = []
     is_ad_reaction_channel_list = []
     for pair in config.reactions.keys():
         pair_list = list(pair)
-
-        # Handle self-reaction first
         if len(pair_list) == 1:
             reaction_channels_list.append((pair_list[0], pair_list[0]))
             is_ad_reaction_channel_list.append(False)
             continue
-
         type1, type2 = pair_list[0], pair_list[1]
-        status1 = site_status_map.get(type1)
-        status2 = site_status_map.get(type2)
-
-        # Enforce canonical order: (Active, Dormant) or sorted(Active, Active)
+        status1, status2 = site_status_map.get(type1), site_status_map.get(type2)
         if status1 == "ACTIVE" and status2 == "DORMANT":
             reaction_channels_list.append((type1, type2))
             is_ad_reaction_channel_list.append(True)
         elif status1 == "DORMANT" and status2 == "ACTIVE":
-            reaction_channels_list.append((type2, type1))  # SWAP to keep Active first
+            reaction_channels_list.append((type2, type1))
             is_ad_reaction_channel_list.append(True)
-        else:  # Both ACTIVE (or both DORMANT, which is a non-reactive channel anyway)
+        else:
             reaction_channels_list.append(tuple(sorted(pair_list)))
             is_ad_reaction_channel_list.append(False)
 
-    # Test guards
-    for pair_tuple in reaction_channels_list:
-        pair_fs = frozenset(pair_tuple)
-        if pair_fs not in config.reactions:
-            raise ValueError(
-                f"Configuration Error: The reaction pair {pair_fs} is defined in "
-                "`rate_matrix` but is missing from `reaction_schema`. "
-                "Every reaction must have a defined outcome."
-            )
-
-    # The rest of the translation now works with this canonical ordering
     num_reactions = len(reaction_channels_list)
     reaction_channels = np.array(
         [[site_type_map[p[0]], site_type_map[p[1]]] for p in reaction_channels_list],
-        dtype=np.int64,
+        dtype=np.int32,
     )
     rate_constants = np.array(
         [config.reactions[frozenset(p)].rate for p in reaction_channels_list],
@@ -335,79 +306,57 @@ def run_simulation(config: SimulationInput) -> SimulationResult:
     is_self_reaction = np.array(
         [p[0] == p[1] for p in reaction_channels_list], dtype=np.bool_
     )
-
-    activation_outcomes = np.full((num_reactions, 2), -1, dtype=np.int64)
-
+    activation_outcomes = np.full((num_reactions, 2), -1, dtype=np.int32)
     for i, pair_tuple in enumerate(reaction_channels_list):
-        pair_fs = frozenset(pair_tuple)
-        schema = config.reactions[pair_fs]
+        schema = config.reactions[frozenset(pair_tuple)]
         if schema.activation_map:
             original_type, new_type = list(schema.activation_map.items())[0]
             activation_outcomes[i, 0] = site_type_map[original_type]
             activation_outcomes[i, 1] = site_type_map[new_type]
 
+    # --- KMC Loop ---
     print("2. Starting KMC simulation loop...")
     start_time = time.time()
-
-    # Run the core simulation in chunks to provide progress updates
     total_reactions_to_run = config.params.max_reactions
-    chunk_size = max(
-        1, total_reactions_to_run // config.params.chunk_size
-    )  # Update 100 times
-
+    chunk_size = max(1, total_reactions_to_run // config.params.chunk_size)
     all_edges = []
     reactions_done_total = 0
     final_time = 0.0
-
-    # Only track conversion if max_conversion is less than 1.0
     track_conversion = config.params.max_conversion < 1.0
     current_conversion = 0.0
 
     with tqdm(total=total_reactions_to_run, desc="Simulating") as pbar:
-        # Check initial conversion only if we're tracking it
         if track_conversion:
             current_conversion = _calculate_conversion(
                 sites_data, monomer_data, total_monomers
             )
             if current_conversion >= config.params.max_conversion:
-                print(
-                    f"\nInitial conversion ({current_conversion:.2%}) already meets or "
-                    f"exceeds max_conversion ({config.params.max_conversion:.2%})"
-                )
+                pbar.total = 0
+                pbar.refresh()
 
         while reactions_done_total < total_reactions_to_run:
-            # Check if we need to stop due to max_conversion
             if track_conversion and current_conversion >= config.params.max_conversion:
-                print(
-                    f"\nMax conversion ({config.params.max_conversion:.2%}) "
-                    f"reached at {current_conversion:.2%}"
-                )
                 pbar.total = reactions_done_total
                 pbar.refresh()
                 break
 
-            # Adapt chunk size based on how close we are to max_conversion
+            reactions_this_chunk = chunk_size
             if track_conversion:
-                # Estimate remaining reactions allowed
                 remaining_conversion = config.params.max_conversion - current_conversion
                 if remaining_conversion > 0:
-                    # Conservative estimate: assume each reaction converts 2 monomers
+                    # Estimate reactions needed to reach target, run a fraction of them
                     estimated_reactions_left = int(
                         remaining_conversion * total_monomers / 2
                     )
                     reactions_this_chunk = min(
-                        max(
-                            1, estimated_reactions_left // 10
-                        ),  # Do in small chunks near limit
-                        chunk_size,
-                        total_reactions_to_run - reactions_done_total,
+                        max(1, estimated_reactions_left // 10), chunk_size
                     )
-                else:
-                    break
-            else:
-                reactions_this_chunk = min(
-                    chunk_size, total_reactions_to_run - reactions_done_total
-                )
+
+            reactions_this_chunk = min(
+                reactions_this_chunk, total_reactions_to_run - reactions_done_total
+            )
+            if reactions_this_chunk <= 0:
+                break
 
             kmc_args = (
                 sites_data,
@@ -424,19 +373,12 @@ def run_simulation(config: SimulationInput) -> SimulationResult:
                 config.params.max_time,
                 reactions_this_chunk,
             )
-            try:
-                edges_chunk, reactions_in_chunk, final_time = run_kmc_loop(*kmc_args)
-            except Exception as e:
-                print(f"Error in KMC loop: {e}")
-                raise e
-
+            edges_chunk, reactions_in_chunk, final_time = run_kmc_loop(*kmc_args)
             if edges_chunk:
                 all_edges.extend(edges_chunk)
-
             reactions_done_total += reactions_in_chunk
             pbar.update(reactions_in_chunk)
 
-            # Check conversion after this chunk only if we're tracking it
             if track_conversion:
                 current_conversion = _calculate_conversion(
                     sites_data, monomer_data, total_monomers
@@ -444,40 +386,44 @@ def run_simulation(config: SimulationInput) -> SimulationResult:
                 pbar.set_postfix({"conversion": f"{current_conversion:.2%}"})
 
             if reactions_in_chunk < reactions_this_chunk:
-                # KMC loop terminated early (no more reactions)
                 pbar.total = reactions_done_total
                 pbar.refresh()
                 break
-
     end_time = time.time()
 
-    # Calculate final conversion
     final_conversion = _calculate_conversion(sites_data, monomer_data, total_monomers)
-
     print(f"3. Simulation finished in {end_time - start_time:.4f} seconds.")
-    print(f"   - Reactions: {reactions_done_total}")
-    print(f"   - Final Sim Time: {final_time:.4e}")
-    print(f"   - Final Conversion: {final_conversion:.2%}")
+    print(
+        f"   - Reactions: {reactions_done_total}, Final Sim Time: {final_time:.4e}, "
+        f"Final Conversion: {final_conversion:.2%}"
+    )
 
-    # Build user-friendly NetworkX graph output
-    print("4. Constructing NetworkX graph...")
+    # --- OPTIMIZED Graph Construction ---
+    print("4. Constructing NetworkX graph (Optimized)...")
     graph = nx.Graph()
-
-    # Add nodes with attributes
-    # Create a map from monomer_type_id not just to name but to the whole def
     monomer_def_map = {monomer_type_map[m.name]: m for m in config.monomers}
 
-    for i in range(total_monomers):
-        monomer_type_id = monomer_data[i, 0]
-        monomer_def = monomer_def_map[monomer_type_id]
-        graph.add_node(
-            i, monomer_type=monomer_def.name, molar_mass=monomer_def.molar_mass
+    # Use add_nodes_from for bulk creation (MUCH faster)
+    node_generator = (
+        (
+            i,
+            {
+                "monomer_type": monomer_def_map[monomer_data[i, 0]].name,
+                "molar_mass": monomer_def_map[monomer_data[i, 0]].molar_mass,
+            },
         )
+        for i in range(total_monomers)
+    )
+    graph.add_nodes_from(node_generator)
 
-    # Add edges with attributes
-    for u, v, t in all_edges:
-        graph.add_edge(int(u), int(v), formation_time=t)
+    # Use add_edges_from for bulk creation (MUCH faster)
+    if all_edges:
+        edge_generator = (
+            (int(u), int(v), {"formation_time": t}) for u, v, t in all_edges
+        )
+        graph.add_edges_from(edge_generator)
 
+    # --- Final Result Packaging ---
     metadata = {
         "wall_time_seconds": end_time - start_time,
         "reactions_completed": reactions_done_total,

@@ -1,6 +1,6 @@
 """Core Kinetic Monte Carlo simulation engine for PolyMCsim."""
 
-from typing import List, Tuple
+from typing import List, Tuple, TypeAlias
 
 import numpy as np
 from numba import njit
@@ -10,14 +10,16 @@ from numba.typed import List as NumbaList
 # --- Numba-Optimized KMC Simulation Engine ---
 
 # Numba requires integer keys for typed dicts
-int_list_type = types.ListType(types.int64)
-numba_dict_type = types.DictType(types.int64, int_list_type)
-int_to_int_dict_type = types.DictType(types.int64, types.int64)
+int_list_type = types.ListType(types.int32)
+numba_dict_type = types.DictType(types.int32, int_list_type)
+int_to_int_dict_type = types.DictType(types.int32, types.int32)
+
+status_type: TypeAlias = np.uint8
 
 # Define integer constants for site statuses for Numba
-STATUS_ACTIVE = 1
-STATUS_DORMANT = 0
-STATUS_CONSUMED = -1
+STATUS_ACTIVE = status_type(2)
+STATUS_DORMANT = status_type(1)
+STATUS_CONSUMED = status_type(0)
 
 # Maximum attempts to find different monomers in a reaction
 MAX_MONOMER_SELECTION_ATTEMPTS = 100
@@ -46,8 +48,8 @@ def _select_reaction_channel(propensities: np.ndarray, total_propensity: float) 
 
 @njit
 def _remove_from_available_sites(
-    available_sites: types.DictType(types.int64, int_list_type),
-    site_position_map: types.DictType(types.int64, types.int64),
+    available_sites: types.DictType(types.int32, int_list_type),
+    site_position_map: types.DictType(types.int32, types.int32),
     site_type_id: int,
     site_global_idx_to_remove: int,
 ):
@@ -78,8 +80,8 @@ def _remove_from_available_sites(
 
 @njit
 def _add_to_available_sites(
-    available_sites: types.DictType(types.int64, int_list_type),
-    site_position_map: types.DictType(types.int64, types.int64),
+    available_sites: types.DictType(types.int32, int_list_type),
+    site_position_map: types.DictType(types.int32, types.int32),
     site_type_id: int,
     site_global_idx_to_add: int,
 ):
@@ -116,10 +118,10 @@ def _add_to_available_sites(
 def _run_kmc_loop(
     sites_data: np.ndarray,
     monomer_data: np.ndarray,
-    available_sites_active: types.DictType(types.int64, int_list_type),
-    available_sites_dormant: types.DictType(types.int64, int_list_type),
-    site_position_map_active: types.DictType(types.int64, types.int64),
-    site_position_map_dormant: types.DictType(types.int64, types.int64),
+    available_sites_active: types.DictType(types.int32, int_list_type),
+    available_sites_dormant: types.DictType(types.int32, int_list_type),
+    site_position_map_active: types.DictType(types.int32, types.int32),
+    site_position_map_dormant: types.DictType(types.int32, types.int32),
     reaction_channels: np.ndarray,
     rate_constants: np.ndarray,
     is_ad_reaction_channel: np.ndarray,
@@ -178,19 +180,19 @@ def _run_kmc_loop(
             type1_id, type2_id = reaction_channels[i]
 
             n1_list = available_sites_active.get(
-                type1_id, NumbaList.empty_list(types.int64)
+                type1_id, NumbaList.empty_list(types.int32)
             )
             n1 = len(n1_list)
 
             if is_ad_reaction_channel[i]:
                 n2_list = available_sites_dormant.get(
-                    type2_id, NumbaList.empty_list(types.int64)
+                    type2_id, NumbaList.empty_list(types.int32)
                 )
                 n2 = len(n2_list)
                 propensity = rate_constants[i] * n1 * n2
             else:  # Active-Active reaction
                 n2_list = available_sites_active.get(
-                    type2_id, NumbaList.empty_list(types.int64)
+                    type2_id, NumbaList.empty_list(types.int32)
                 )
                 n2 = len(n2_list)
                 if is_self_reaction[i]:
@@ -305,7 +307,10 @@ def _run_kmc_loop(
                     # Add to active list
                     active_list = available_sites_active[new_active_type]
                     active_list.append(site_to_check_idx)
-                    site_position_map_active[site_to_check_idx] = len(active_list) - 1
+                    # FIX: Explicitly cast to int32 to avoid Numba warning
+                    site_position_map_active[site_to_check_idx] = np.int32(
+                        len(active_list) - 1
+                    )
                     # Remove from dormant list
                     _remove_from_available_sites(
                         available_sites_dormant,
