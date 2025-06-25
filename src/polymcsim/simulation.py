@@ -84,31 +84,31 @@ def _validate_config(config: SimulationInput) -> bool:
         if not reaction_def.activation_map:
             continue
 
-        original_dormant_type, new_active_type = list(
+        for original_dormant_type, new_active_type in list(
             reaction_def.activation_map.items()
-        )[0]
+        ):
+            # The new type must be a known site type
+            if new_active_type not in all_known_types:
+                raise ValueError(
+                    "Undefined Activation Product: The new site type "
+                    f"'{new_active_type}' created by activation "
+                    f"in reaction {reaction_pair} is not defined "
+                    "anywhere in the system."
+                )
 
-        # The new type must be a known site type
-        if new_active_type not in all_known_types:
-            raise ValueError(
-                "Undefined Activation Product: The new site type "
-                f"'{new_active_type}' created by activation "
-                f"in reaction {reaction_pair} is not defined anywhere in the system."
-            )
+            if original_dormant_type not in initial_site_statuses:
+                raise ValueError(
+                    f"Undefined Activation Target: The site '{original_dormant_type}' "
+                    "targeted for activation in reaction "
+                    f"{reaction_pair} is not defined on any monomer."
+                )
 
-        if original_dormant_type not in initial_site_statuses:
-            raise ValueError(
-                f"Undefined Activation Target: The site '{original_dormant_type}' "
-                "targeted for activation in reaction "
-                f"{reaction_pair} is not defined on any monomer."
-            )
-
-        if initial_site_statuses[original_dormant_type] != "DORMANT":
-            raise ValueError(
-                f"Invalid Activation Target: The site '{original_dormant_type}' "
-                "targeted for activation in reaction "
-                f"{reaction_pair} must be DORMANT, but it is defined as ACTIVE."
-            )
+            if initial_site_statuses[original_dormant_type] != "DORMANT":
+                raise ValueError(
+                    f"Invalid Activation Target: The site '{original_dormant_type}' "
+                    "targeted for activation in reaction "
+                    f"{reaction_pair} must be DORMANT, but it is defined as ACTIVE."
+                )
 
     return True
 
@@ -306,13 +306,16 @@ def run_simulation(config: SimulationInput) -> SimulationResult:
     is_self_reaction = np.array(
         [p[0] == p[1] for p in reaction_channels_list], dtype=np.bool_
     )
-    activation_outcomes = np.full((num_reactions, 2), -1, dtype=np.int32)
+    activation_outcomes = np.full((num_reactions, 10, 2), -1, dtype=np.int32)
+
     for i, pair_tuple in enumerate(reaction_channels_list):
         schema = config.reactions[frozenset(pair_tuple)]
         if schema.activation_map:
-            original_type, new_type = list(schema.activation_map.items())[0]
-            activation_outcomes[i, 0] = site_type_map[original_type]
-            activation_outcomes[i, 1] = site_type_map[new_type]
+            for j, (original_type, new_type) in enumerate(
+                list(schema.activation_map.items())
+            ):
+                activation_outcomes[i, j, 0] = site_type_map[original_type]
+                activation_outcomes[i, j, 1] = site_type_map[new_type]
 
     # --- KMC Loop ---
     print("2. Starting KMC simulation loop...")

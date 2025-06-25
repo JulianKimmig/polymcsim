@@ -155,7 +155,7 @@ def _run_kmc_loop(
             active-dormant reaction channels.
         is_self_reaction: Shape (N_reactions,). Boolean array indicating
             self-reaction channels.
-        activation_outcomes: Shape (N_reactions, 2).
+        activation_outcomes: Shape (N_reactions,max_activation_outcomes, 2).
             [target_dormant_type, new_active_type].
         max_time: Maximum simulation time to run.
         max_reactions: Maximum number of reaction events.
@@ -277,48 +277,48 @@ def _run_kmc_loop(
             )
 
         # Handle activation on the second monomer
-        target_dormant_type, new_active_type = activation_outcomes[channel_idx]
-        if new_active_type != -1:
-            # Find the site on monomer2 that needs activation
-            monomer2_first_site = monomer_data[monomer2_id, 1]
-            num_sites_on_monomer = (
-                monomer_data[monomer2_id + 1, 1] - monomer2_first_site
-                if (monomer2_id + 1) < monomer_data.shape[0]
-                else sites_data.shape[0] - monomer2_first_site
-            )
-            for s_offset in range(num_sites_on_monomer):
-                site_to_check_idx = monomer2_first_site + s_offset
-                # We need to activate a DORMANT site that is NOT the one
-                # that just reacted.
-
-                # Condition 1: It must be the correct dormant type.
-                is_correct_dormant_type = (
-                    sites_data[site_to_check_idx, 1] == target_dormant_type
+        for target_dormant_type, new_active_type in activation_outcomes[channel_idx]:
+            if new_active_type != -1:
+                # Find the site on monomer2 that needs activation
+                monomer2_first_site = monomer_data[monomer2_id, 1]
+                num_sites_on_monomer = (
+                    monomer_data[monomer2_id + 1, 1] - monomer2_first_site
+                    if (monomer2_id + 1) < monomer_data.shape[0]
+                    else sites_data.shape[0] - monomer2_first_site
                 )
+                for s_offset in range(num_sites_on_monomer):
+                    site_to_check_idx = monomer2_first_site + s_offset
+                    # We need to activate a DORMANT site that is NOT the one
+                    # that just reacted.
 
-                # Condition 2: It must not be the site that just participated
-                # in the reaction.
-                is_not_the_reacted_site = site_to_check_idx != site2_global_idx
+                    # Condition 1: It must be the correct dormant type.
+                    is_correct_dormant_type = (
+                        sites_data[site_to_check_idx, 1] == target_dormant_type
+                    )
 
-                if is_correct_dormant_type and is_not_the_reacted_site:
-                    # Activate this site
-                    sites_data[site_to_check_idx, 1] = new_active_type
-                    sites_data[site_to_check_idx, 2] = STATUS_ACTIVE
-                    # Add to active list
-                    active_list = available_sites_active[new_active_type]
-                    active_list.append(site_to_check_idx)
-                    # FIX: Explicitly cast to int32 to avoid Numba warning
-                    site_position_map_active[site_to_check_idx] = np.int32(
-                        len(active_list) - 1
-                    )
-                    # Remove from dormant list
-                    _remove_from_available_sites(
-                        available_sites_dormant,
-                        site_position_map_dormant,
-                        target_dormant_type,
-                        site_to_check_idx,
-                    )
-                    break  # Found and activated, no need to check other sites
+                    # Condition 2: It must not be the site that just participated
+                    # in the reaction.
+                    is_not_the_reacted_site = site_to_check_idx != site2_global_idx
+
+                    if is_correct_dormant_type and is_not_the_reacted_site:
+                        # Activate this site
+                        sites_data[site_to_check_idx, 1] = new_active_type
+                        sites_data[site_to_check_idx, 2] = STATUS_ACTIVE
+                        # Add to active list
+                        active_list = available_sites_active[new_active_type]
+                        active_list.append(site_to_check_idx)
+                        # FIX: Explicitly cast to int32 to avoid Numba warning
+                        site_position_map_active[site_to_check_idx] = np.int32(
+                            len(active_list) - 1
+                        )
+                        # Remove from dormant list
+                        _remove_from_available_sites(
+                            available_sites_dormant,
+                            site_position_map_dormant,
+                            target_dormant_type,
+                            site_to_check_idx,
+                        )
+                        break  # Found and activated, no need to check other sites
 
         reaction_count += 1
 

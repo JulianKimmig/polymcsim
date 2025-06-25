@@ -814,7 +814,10 @@ def plot_branching_analysis(
 def create_analysis_dashboard(
     graph: nx.Graph,
     metadata: Dict[str, any],
-    figsize: Tuple[int, int] = (16, 12),
+    figsize: Tuple[int, int] = (
+        12,
+        9,
+    ),  # Reduced from (16, 12) to prevent memory issues
     title: Optional[str] = None,
     save_path: Optional[Union[str, Path]] = None,
 ) -> plt.Figure:
@@ -995,7 +998,24 @@ def create_analysis_dashboard(
     plt.tight_layout()
 
     if save_path:
-        plt.savefig(save_path, bbox_inches="tight", dpi=300)
+        # Calculate the maximum DPI that won't cause memory issues
+        # Target maximum image size of ~2000x1500 pixels to avoid memory problems
+        max_width_pixels = 2000
+        max_height_pixels = 1500
+
+        # Calculate DPI based on figure size
+        width_inches, height_inches = figsize
+        max_dpi_width = max_width_pixels / width_inches
+        max_dpi_height = max_height_pixels / height_inches
+        safe_dpi = min(300, max_dpi_width, max_dpi_height)
+
+        try:
+            plt.savefig(save_path, bbox_inches="tight", dpi=safe_dpi)
+        except MemoryError:
+            # If still getting memory error, try with even lower DPI
+            plt.savefig(save_path, bbox_inches="tight", dpi=150)
+        except Exception as e:
+            print(f"Warning: Could not save figure to {save_path}: {e}")
 
     return fig
 

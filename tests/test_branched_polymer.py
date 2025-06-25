@@ -66,15 +66,18 @@ def branched_polymer_config() -> SimulationInput:
             ),
             # Propagation on branch monomer (head)
             frozenset(["Radical", "B_Head"]): ReactionSchema(
-                activation_map={"B_Tail": "Radical"},
+                activation_map={
+                    "B_Tail": "Radical",
+                    "B_Branch": "Radical",
+                },
                 rate=80.0,
             ),
-            # Branching reaction (branch site)
-            frozenset(["Radical", "B_Branch"]): ReactionSchema(
-                activation_map={"B_Tail": "Radical"},
-                rate=60.0,
-            ),
-            # Termination
+            # # Branching reaction (branch site)
+            # frozenset(["Radical", "B_Branch"]): ReactionSchema(
+            #     activation_map={"B_Tail": "Radical"},
+            #     rate=60.0,
+            # ),
+            # # Termination
             frozenset(["Radical", "Radical"]): ReactionSchema(rate=20.0),
         },
         params=SimParams(max_reactions=5000, random_seed=123, name="branched_polymer"),
