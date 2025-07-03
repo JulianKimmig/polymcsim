@@ -1,3 +1,14 @@
+## 0.8.0 (2025-07-03)
+
+### Feat
+
+- **polymers**: ✨ add nSHI calculation methods to Polymer and SimulationResult classes
+- **utils**: ✨ add functions to calculate Sequence Heterogeneity Index (SHI) and Normalized SHI (nSHI)
+
+### Refactor
+
+- **utils**: 🔧 optimize SHI calculation and improve monomer type retrieval
+
 ## 0.7.0 (2025-06-26)
 
 ### Feat

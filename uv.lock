@@ -1120,14 +1120,10 @@ wheels = [
 
 [[package]]
 name = "polymcsim"
-version = "0.7.0"
+version = "0.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "matplotlib" },
-    { name = "mkdocs" },
-    { name = "mkdocs-gen-files" },
-    { name = "mkdocs-material" },
-    { name = "mkdocstrings", extra = ["python"] },
     { name = "networkx" },
     { name = "numba" },
     { name = "numpy" },
@@ -1148,15 +1144,21 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-timeout" },
 ]
+doc = [
+    { name = "mkdocs" },
+    { name = "mkdocs-gen-files" },
+    { name = "mkdocs-material" },
+    { name = "mkdocstrings", extra = ["python"] },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "commitizen", marker = "extra == 'dev'", specifier = ">=4.8.3" },
     { name = "matplotlib", specifier = ">=3.8.0" },
-    { name = "mkdocs", specifier = ">=1.6.1" },
-    { name = "mkdocs-gen-files", specifier = ">=0.5.0" },
-    { name = "mkdocs-material", specifier = ">=9.6.14" },
-    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.29.1" },
+    { name = "mkdocs", marker = "extra == 'doc'", specifier = ">=1.6.1" },
+    { name = "mkdocs-gen-files", marker = "extra == 'doc'", specifier = ">=0.5.0" },
+    { name = "mkdocs-material", marker = "extra == 'doc'", specifier = ">=9.6.14" },
+    { name = "mkdocstrings", extras = ["python"], marker = "extra == 'doc'", specifier = ">=0.29.1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "networkx", specifier = ">=3.0" },
     { name = "numba", specifier = ">=0.57.0" },
@@ -1172,7 +1174,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.10.0" },
     { name = "tqdm" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "doc"]
 
 [[package]]
 name = "pre-commit"
