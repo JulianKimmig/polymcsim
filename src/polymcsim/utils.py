@@ -25,14 +25,12 @@ def calculate_SHI(polymer_graph: nx.Graph) -> float:
     if total_bond_count == 0:
         return 0.0
 
-    hetero_bond_types = set()
+    hetero_bond_count = 0
     for u, v in polymer_graph.edges:
         type_u = polymer_graph.nodes[u]["monomer_type"]
         type_v = polymer_graph.nodes[v]["monomer_type"]
         if type_u != type_v:
-            hetero_bond_types.add((type_u, type_v))
-
-    hetero_bond_count = len(hetero_bond_types)
+            hetero_bond_count += 1
 
     # Calculate the final ratio
     shi = hetero_bond_count / total_bond_count
@@ -81,4 +79,4 @@ def calculate_nSHI(polymer_graph: nx.Graph) -> float:
     if expected_shi == 0.0:
         return 0.0
 
-    return shi / expected_shi
+    return shi / (expected_shi * 2)

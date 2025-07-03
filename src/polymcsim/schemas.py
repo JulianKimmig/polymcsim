@@ -16,6 +16,8 @@ from pydantic import (
     field_validator,
 )
 
+from polymcsim.utils import calculate_nSHI
+
 __all__ = [
     "SiteDef",
     "MonomerDef",
@@ -289,6 +291,13 @@ class Polymer(BaseModel):
             nodes[data["monomer_type"]].append(node)
         return nodes
 
+    def get_nSHI(self) -> float:
+        """Calculate the Normalized Sequence Heterogeneity Index (nSHI).
+
+        Returns the nSHI for the polymer graph.
+        """
+        return calculate_nSHI(self.graph)
+
 
 class SimulationResult(BaseModel):
     """Holds the results of a single simulation run.
@@ -409,6 +418,19 @@ class SimulationResult(BaseModel):
         pdi = mw / mn if mn > 0 else 0.0
 
         return {"Mn": mn, "Mw": mw, "PDI": pdi}
+
+    def get_nSHI(self) -> float:
+        """Calculate the Normalized Sequence Heterogeneity Index (nSHI).
+
+        Returns:
+            A float representing the nSHI value for the polymer graph.
+
+        """
+        if self.graph is None:
+            return 0.0
+
+        nshis = [p.get_nSHI() for p in self.get_polymers()]
+        return np.mean(nshis)
 
     def summary(self) -> Dict[str, Any]:
         """Provide a summary of the simulation results.
